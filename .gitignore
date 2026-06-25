@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+backend/.venv/
+
+# Build outputs
+dist/
+build/
+
+# Backend specific
+backend/migrations/
+__pycache__/
+
+# IDE
+.vscode/
+.idea/

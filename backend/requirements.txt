@@ -1,0 +1,17 @@
+fastapi
+uvicorn[standard]
+pydantic-settings
+sqlalchemy[asyncio]
+asyncpg
+psycopg2-binary
+python-dotenv
+alembic
+pyjwt
+email-validator
+httpx
+uuid6
+celery
+redis
+pwdlib[bcrypt]
+google-auth
+requests
