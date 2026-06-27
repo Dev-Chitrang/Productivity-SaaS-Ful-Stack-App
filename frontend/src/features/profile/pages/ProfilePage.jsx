@@ -2,8 +2,7 @@ import { useRef } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { User, Mail, Lock, Shield, Camera, ArrowLeft } from "lucide-react"
-import { Link } from "react-router-dom"
+import { User, Mail, Lock, Shield, Camera } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -61,19 +60,14 @@ function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <ProfileHeader />
-        <main className="mx-auto max-w-lg px-6 py-12">
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </main>
-      </div>
+      <main className="mx-auto max-w-lg px-6 py-8">
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </main>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <ProfileHeader />
-      <main className="mx-auto max-w-lg px-6 py-12">
+    <main className="mx-auto max-w-lg px-6 py-8">
         <div className="mb-8 flex flex-col items-center gap-4">
           <div className="relative">
             <Avatar size="lg">
@@ -145,22 +139,6 @@ function ProfilePage() {
           </form>
         </Form>
       </main>
-    </div>
-  )
-}
-
-function ProfileHeader() {
-  return (
-    <header className="border-b border-border">
-      <div className="mx-auto flex h-12 max-w-6xl items-center justify-between px-6">
-        <div className="flex items-center gap-3">
-          <Link to="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
-            <ArrowLeft className="size-4" />
-          </Link>
-          <span className="text-sm font-semibold tracking-tight">Profile</span>
-        </div>
-      </div>
-    </header>
   )
 }
 

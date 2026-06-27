@@ -4,11 +4,12 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { motion } from "framer-motion"
 import {
-  Mail, Lock, User, Eye, EyeOff, ArrowRight, Check, Sparkles,
+  Mail, Lock, User, Eye, EyeOff, ArrowRight, Check, Sparkles, ArrowLeft,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ThemeToggle } from "@/components/ThemeToggle"
 import {
   Form,
   FormControl,
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/form"
 import { useLogin, useSignup, useGoogleOAuth } from "../hooks/useAuth"
 import { useAuthContext } from "@/context/AuthContext"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { GoogleButton, OrDivider } from "../components/GoogleButton"
 
 // ---------------------------------------------------------------------------
@@ -355,17 +356,17 @@ function OtpCard({ verificationToken, mode, onBack, onSignupVerified }) {
         initial={{ opacity: 0, scale: 0.92, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        className="w-[440px] bg-white px-10 py-10 rounded-xl shadow-2xl ring-1 ring-slate-200"
+        className="w-[440px] bg-card px-10 py-10 rounded-xl shadow-2xl ring-1 ring-border"
       >
         {showSuccess ? (
           <div className="text-center">
             <div className="mb-4 flex justify-center">
-              <div className="flex size-12 items-center justify-center rounded-full bg-emerald-50">
-                <Check className="size-6 text-emerald-600" />
+              <div className="flex size-12 items-center justify-center rounded-full bg-muted">
+                <Check className="size-6 text-primary" />
               </div>
             </div>
-            <h2 className="text-lg font-semibold text-slate-900">Email verified</h2>
-            <p className="mt-1.5 text-sm text-slate-500">
+            <h2 className="text-lg font-semibold text-card-foreground">Email verified</h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">
               Your account is ready. Please sign in to continue.
             </p>
             <Button className="mt-6" onClick={onSignupVerified}>
@@ -375,10 +376,10 @@ function OtpCard({ verificationToken, mode, onBack, onSignupVerified }) {
         ) : (
           <>
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-slate-900">
+              <h2 className="text-lg font-semibold text-card-foreground">
                 {mode === "signup" ? "Verify your email" : "Two-factor authentication"}
               </h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-muted-foreground">
                 {mode === "signup"
                   ? "Enter the 6-digit code sent to your email."
                   : "Enter the 6-digit code sent to your email to complete login."}
@@ -410,7 +411,7 @@ function OtpCard({ verificationToken, mode, onBack, onSignupVerified }) {
                       : "Verify login"}
                   <Check className="size-3.5 ml-1" />
                 </Button>
-                <div className="flex flex-col items-center gap-2 text-sm text-slate-500">
+                <div className="flex flex-col items-center gap-2 text-sm text-muted-foreground">
                   {countdown > 0 ? (
                     <span>
                       Resend code in {Math.floor(countdown / 60)}:{String(countdown % 60).padStart(2, "0")}
@@ -418,7 +419,7 @@ function OtpCard({ verificationToken, mode, onBack, onSignupVerified }) {
                   ) : (
                     <button
                       type="button"
-                      className="text-sm text-indigo-600 hover:text-indigo-500 transition-colors"
+                      className="text-sm text-primary hover:text-primary/80 transition-colors"
                       disabled={resendMutation.isPending}
                       onClick={handleResend}
                     >
@@ -432,7 +433,7 @@ function OtpCard({ verificationToken, mode, onBack, onSignupVerified }) {
             <button
               type="button"
               onClick={onBack}
-              className="mt-6 w-full text-center text-sm text-slate-500 hover:text-slate-700 transition-colors"
+              className="mt-6 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Back to {mode === "signup" ? "sign up" : "sign in"}
             </button>
@@ -450,12 +451,24 @@ function OtpCard({ verificationToken, mode, onBack, onSignupVerified }) {
 function AuthPage() {
   const { isAuthenticated, loginTokens } = useAuthContext()
   const navigate = useNavigate()
-  const [activeCard, setActiveCard] = useState("signup")
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // Read initial mode from URL, default to login
+  const modeParam = searchParams.get("mode")
+  const [activeCard, setActiveCard] = useState(
+    modeParam === "signup" ? "signup" : "login",
+  )
+
   const [otpState, setOtpState] = useState({ show: false, token: null, mode: "signup" })
 
   useEffect(() => {
     if (isAuthenticated) navigate("/dashboard", { replace: true })
   }, [isAuthenticated, navigate])
+
+  // Sync URL param with activeCard
+  useEffect(() => {
+    setSearchParams({ mode: activeCard }, { replace: true })
+  }, [activeCard, setSearchParams])
 
   function handleOtpSent(token, mode) {
     setOtpState({ show: true, token, mode })
@@ -479,7 +492,19 @@ function AuthPage() {
   const loginInactive = activeCard !== "login"
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-slate-50 via-white to-indigo-50 flex flex-col items-center justify-center px-6 py-12">
+    <div className="relative min-h-screen bg-background flex flex-col items-center justify-center px-6 py-12">
+      {/* Top bar with back link and theme toggle */}
+      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-4 py-3">
+        <Link
+          to="/"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Back to home"
+        >
+          <ArrowLeft className="size-3.5" />
+          Home
+        </Link>
+        <ThemeToggle />
+      </div>
       {otpState.show && (
         <OtpCard
           verificationToken={otpState.token}
@@ -491,14 +516,14 @@ function AuthPage() {
 
       <div className="mb-10 text-center">
         <div className="mb-3 flex justify-center">
-          <div className="flex size-12 items-center justify-center rounded-2xl bg-indigo-600 shadow-lg shadow-indigo-200">
-            <Sparkles className="size-6 text-white" />
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-primary shadow-lg">
+            <Sparkles className="size-6 text-primary-foreground" />
           </div>
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">
           Unified Workspace
         </h1>
-        <p className="mt-1.5 text-sm text-slate-500">
+        <p className="mt-1.5 text-sm text-muted-foreground">
           Meetings, Notes, Tasks and Calendar in one place.
         </p>
       </div>
@@ -521,22 +546,22 @@ function AuthPage() {
               : "0 25px 50px -12px rgba(0,0,0,0.25)"
           }}
           onClick={() => { if (signupInactive) setActiveCard("signup") }}
-          className="relative w-full lg:w-[460px] xl:w-[480px] bg-white rounded-xl p-8 sm:p-10 cursor-default"
+          className="relative w-full lg:w-[460px] xl:w-[480px] bg-card rounded-xl p-8 sm:p-10 cursor-default"
         >
           <div className={signupInactive ? "pointer-events-none" : ""}>
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-slate-900">Create account</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-lg font-semibold text-card-foreground">Create account</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Fill in the details to get started.
               </p>
             </div>
             <SignupForm onOtpSent={handleOtpSent} onLoginSuccess={handleLoginSuccess} />
-            <p className="mt-6 text-center text-sm text-slate-500">
+            <p className="mt-6 text-center text-sm text-muted-foreground">
               Already have an account?{" "}
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setActiveCard("login") }}
-                className="text-indigo-600 hover:text-indigo-500 transition-colors font-medium"
+                className="text-primary hover:text-primary/80 transition-colors font-medium"
               >
                 Sign in
               </button>
@@ -561,22 +586,22 @@ function AuthPage() {
               : "0 25px 50px -12px rgba(0,0,0,0.25)"
           }}
           onClick={() => { if (loginInactive) setActiveCard("login") }}
-          className="relative w-full lg:w-[460px] xl:w-[480px] bg-white rounded-xl p-8 sm:p-10 cursor-default"
+          className="relative w-full lg:w-[460px] xl:w-[480px] bg-card rounded-xl p-8 sm:p-10 cursor-default"
         >
           <div className={loginInactive ? "pointer-events-none" : ""}>
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-slate-900">Sign in</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-lg font-semibold text-card-foreground">Sign in</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Enter your credentials to access your account.
               </p>
             </div>
             <LoginForm onOtpSent={handleOtpSent} onLoginSuccess={handleLoginSuccess} />
-            <p className="mt-6 text-center text-sm text-slate-500">
+            <p className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setActiveCard("signup") }}
-                className="text-indigo-600 hover:text-indigo-500 transition-colors font-medium"
+                className="text-primary hover:text-primary/80 transition-colors font-medium"
               >
                 Create account
               </button>

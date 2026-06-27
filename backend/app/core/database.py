@@ -1,7 +1,9 @@
 from typing import AsyncGenerator
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import declarative_base
 from app.core.config import settings
+from app.core.logger import logger
 
 engine = create_async_engine(
     settings.async_database_url,
@@ -17,6 +19,16 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 Base = declarative_base()
+
+async def check_database_health() -> None:
+    """Verify PostgreSQL connection. Raises on failure."""
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        logger.info("PostgreSQL connected")
+    except Exception as e:
+        logger.error("PostgreSQL connection failed: %s", str(e))
+        raise
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:

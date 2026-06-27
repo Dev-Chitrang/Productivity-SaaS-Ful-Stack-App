@@ -2,8 +2,7 @@ import { useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { Mail, Lock, Eye, EyeOff, ArrowLeft } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Mail, Lock, Eye, EyeOff } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -71,19 +70,7 @@ function SettingsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b border-border">
-        <div className="mx-auto flex h-12 max-w-lg items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <Link to="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
-              <ArrowLeft className="size-4" />
-            </Link>
-            <span className="text-sm font-semibold tracking-tight">Settings</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="mx-auto max-w-lg px-6 py-12">
+    <main className="mx-auto max-w-lg px-6 py-8">
         <div className="space-y-8">
           {/* Change Email */}
           <section>
@@ -201,7 +188,6 @@ function SettingsPage() {
           </section>
         </div>
       </main>
-    </div>
   )
 }
 
