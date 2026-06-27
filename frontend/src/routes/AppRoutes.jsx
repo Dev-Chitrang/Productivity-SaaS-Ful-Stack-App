@@ -9,6 +9,7 @@ import DashboardPage from "../features/dashboard/pages/DashboardPage"
 import ProfilePage from "../features/profile/pages/ProfilePage"
 import SettingsPage from "../features/settings/pages/SettingsPage"
 import CalendarPage from "../features/calendar/pages/CalendarPage"
+import NotesPage from "../features/notes/pages/NotesPage"
 import AuthLayout from "../layouts/AuthLayout"
 import MainLayout from "../layouts/MainLayout"
 
@@ -31,6 +32,7 @@ function AppRoutes() {
       <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/notes" element={<NotesPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
