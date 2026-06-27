@@ -15,3 +15,7 @@ __pycache__/
 # IDE
 .vscode/
 .idea/
+
+.env
+app.log
+alembic.ini

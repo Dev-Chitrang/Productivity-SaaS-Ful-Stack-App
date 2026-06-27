@@ -8,7 +8,9 @@ import ResetPasswordPage from "../features/auth/pages/ResetPasswordPage"
 import DashboardPage from "../features/dashboard/pages/DashboardPage"
 import ProfilePage from "../features/profile/pages/ProfilePage"
 import SettingsPage from "../features/settings/pages/SettingsPage"
+import CalendarPage from "../features/calendar/pages/CalendarPage"
 import AuthLayout from "../layouts/AuthLayout"
+import MainLayout from "../layouts/MainLayout"
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuthContext()
@@ -26,9 +28,12 @@ function AppRoutes() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
       </Route>
-      <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
-      <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+      <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+        <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
     </Routes>
   )
 }

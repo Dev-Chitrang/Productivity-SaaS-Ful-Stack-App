@@ -18,6 +18,7 @@ import {
   Split,
 } from "lucide-react"
 import { Link } from "react-router-dom"
+import { ThemeToggle } from "@/components/ThemeToggle"
 
 const features = [
   {
@@ -79,11 +80,12 @@ function LandingPage() {
             Unified Workspace
           </span>
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <Button variant="outline" asChild>
-              <Link to="/auth">Log in</Link>
+              <Link to="/auth?mode=login">Log in</Link>
             </Button>
             <Button asChild>
-              <Link to="/auth">Get Started</Link>
+              <Link to="/auth?mode=signup">Get Started</Link>
             </Button>
           </div>
         </div>
@@ -103,7 +105,7 @@ function LandingPage() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Button size="lg" asChild>
-<Link to="/auth">
+<Link to="/auth?mode=signup">
                 Get Started
                 <ArrowRight className="size-3.5" />
               </Link>
@@ -228,7 +230,7 @@ function LandingPage() {
               focused workspace.
             </p>
             <Button size="lg" asChild>
-              <Link to="/auth">
+              <Link to="/auth?mode=signup">
                 Get Started
                 <ArrowRight className="size-3.5" />
               </Link>

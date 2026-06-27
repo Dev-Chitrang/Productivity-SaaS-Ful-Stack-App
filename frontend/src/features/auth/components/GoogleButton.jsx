@@ -41,19 +41,18 @@ export function GoogleButton({ onClick, isLoading }) {
             disabled={isLoading}
             className="
         relative flex w-full items-center justify-center gap-2.5
-        h-10 rounded-md border border-slate-200 bg-white
-        text-sm font-medium text-slate-700
+        h-10 rounded-md border border-border bg-card
+        text-sm font-medium text-card-foreground
         shadow-sm
         transition-all duration-150
-        hover:bg-slate-50 hover:border-slate-300
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2
+        hover:bg-muted hover:border-border
+        focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring
         disabled:pointer-events-none disabled:opacity-50
       "
         >
             {isLoading ? (
-                /* Simple spinner that matches the button size */
                 <svg
-                    className="size-4 animate-spin text-slate-400"
+                    className="size-4 animate-spin text-muted-foreground"
                     xmlns="http://www.w3.org/2000/svg"
                     fill="none"
                     viewBox="0 0 24 24"
@@ -89,9 +88,9 @@ export function GoogleButton({ onClick, isLoading }) {
 export function OrDivider() {
     return (
         <div className="relative flex items-center gap-3 py-1">
-            <div className="h-px flex-1 bg-slate-200" />
-            <span className="text-xs text-slate-400 font-medium select-none">OR</span>
-            <div className="h-px flex-1 bg-slate-200" />
+            <div className="h-px flex-1 bg-border" />
+            <span className="text-xs text-muted-foreground font-medium select-none">OR</span>
+            <div className="h-px flex-1 bg-border" />
         </div>
     )
 }

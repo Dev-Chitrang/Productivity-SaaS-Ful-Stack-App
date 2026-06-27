@@ -13,7 +13,7 @@ function ResetPasswordPage() {
       <ResetPasswordForm />
       <p className="text-center text-xs text-muted-foreground">
         <Link
-          to="/login"
+          to="/auth?mode=login"
           className="hover:text-foreground transition-colors"
         >
           Back to sign in
