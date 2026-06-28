@@ -16,7 +16,7 @@ const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/calendar", icon: Calendar, label: "Calendar" },
   { to: "/notes", icon: FileText, label: "Notes" },
-  { to: "/tasks", icon: CheckSquare, label: "Tasks", disabled: true },
+  { to: "/tasks", icon: CheckSquare, label: "Tasks" },
   { to: "/meetings", icon: Video, label: "Meetings", disabled: true },
   { to: "/participants", icon: Users, label: "Participants", disabled: true },
   { to: "/notifications", icon: Bell, label: "Notifications", disabled: true },

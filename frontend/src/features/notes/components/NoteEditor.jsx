@@ -1,20 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react"
-import { useEditor, EditorContent } from "@tiptap/react"
-import StarterKit from "@tiptap/starter-kit"
-import Underline from "@tiptap/extension-underline"
-import TaskList from "@tiptap/extension-task-list"
-import TaskItem from "@tiptap/extension-task-item"
-import { Table } from "@tiptap/extension-table"
-import TableRow from "@tiptap/extension-table-row"
-import TableCell from "@tiptap/extension-table-cell"
-import TableHeader from "@tiptap/extension-table-header"
-import Placeholder from "@tiptap/extension-placeholder"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
+import { RichTextEditor, EditorToolbar, getEmptyDoc } from "@/shared/editor"
 import { Button } from "@/components/ui/button"
-import { NoteToolbar } from "./NoteToolbar"
 import { EditorSkeleton } from "./LoadingSkeleton"
 import { ArrowLeft, Plus, FileText, Circle, Pin, Star, Archive, Trash2, RotateCcw } from "lucide-react"
 import { AUTO_SAVE_DELAY } from "../constants"
-import { getEmptyDoc } from "../utils/notesUtils"
 
 export function NoteEditor({
     note,
@@ -34,78 +23,47 @@ export function NoteEditor({
     const [title, setTitle] = useState("")
     const [category, setCategory] = useState("")
     const [newTag, setNewTag] = useState("")
+    const [editorInstance, setEditorInstance] = useState(null)
     const saveTimer = useRef(null)
     const titleRef = useRef(title)
     const categoryRef = useRef(category)
     const onSaveRef = useRef(onSave)
-    const isUpdatingContent = useRef(false)
 
     useEffect(() => { titleRef.current = title }, [title])
     useEffect(() => { categoryRef.current = category }, [category])
     useEffect(() => { onSaveRef.current = onSave }, [onSave])
 
-    const editor = useEditor({
-        extensions: [
-            StarterKit.configure({
-                heading: { levels: [1, 2, 3] },
-                underline: false,
-            }),
-            Underline,
-            TaskList,
-            TaskItem.configure({ nested: true }),
-            Table.configure({ resizable: true }),
-            TableRow,
-            TableCell,
-            TableHeader,
-            Placeholder.configure({
-                placeholder: "Start writing…",
-            }),
-        ],
-        content: getEmptyDoc(),
-        onUpdate: () => {
-            if (isUpdatingContent.current) return
-            autosaveRef.current()
-        },
-        editorProps: {
-            attributes: {
-                class: "prose prose-sm max-w-none focus:outline-none min-h-[300px] text-xs",
-            },
-        },
-    })
+    const isDeleted = note ? !!note.deleted_at : false
+
+    const contentJson = useMemo(() => {
+        if (isCreating) return getEmptyDoc()
+        if (note?.content) {
+            try {
+                return typeof note.content === "string" ? JSON.parse(note.content) : note.content
+            } catch {
+                return getEmptyDoc()
+            }
+        }
+        return getEmptyDoc()
+    }, [note?.content, isCreating])
 
     const autosaveRef = useRef(() => {})
     const triggerAutosave = useCallback(() => {
         if (saveTimer.current) clearTimeout(saveTimer.current)
         saveTimer.current = setTimeout(() => {
-            if (!editor) return
-            const json = editor.getJSON()
             onSaveRef.current?.({
                 title: titleRef.current || null,
-                content: JSON.stringify(json),
+                content: JSON.stringify(editorInstance?.getJSON() || getEmptyDoc()),
                 category: categoryRef.current || null,
             })
         }, AUTO_SAVE_DELAY)
-    }, [editor])
+    }, [editorInstance])
 
     autosaveRef.current = triggerAutosave
 
-    const isDeleted = note ? !!note.deleted_at : false
-
-    useEffect(() => {
-        if (!editor) return
-        isUpdatingContent.current = true
-        if (isCreating) {
-            editor.commands.setContent(getEmptyDoc())
-        } else if (note) {
-            try {
-                const json = typeof note.content === "string" ? JSON.parse(note.content) : note.content
-                editor.commands.setContent(json || getEmptyDoc())
-            } catch {
-                editor.commands.setContent(getEmptyDoc())
-            }
-        }
-        isUpdatingContent.current = false
-    }, [note?.id, isCreating, editor])
+    const handleEditorUpdate = useCallback((json) => {
+        triggerAutosave()
+    }, [triggerAutosave])
 
     const prevNoteId = useRef(note?.id)
     useEffect(() => {
@@ -302,10 +260,17 @@ export function NoteEditor({
                 </div>
             </div>
 
-            <NoteToolbar editor={editor} />
+            <EditorToolbar editor={editorInstance} />
 
             <div className="flex-1 overflow-y-auto px-4 py-3">
-                <EditorContent editor={editor} className="h-full" />
+                <RichTextEditor
+                    content={contentJson}
+                    onUpdate={handleEditorUpdate}
+                    editorRef={setEditorInstance}
+                    editable={!isDeleted}
+                    placeholder="Start writing…"
+                    editorClassName="h-full"
+                />
             </div>
         </div>
     )

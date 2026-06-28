@@ -15,6 +15,7 @@ from app.modules.auth.routes import router as auth_router
 from app.modules.users.routes import router as users_router
 from app.modules.calender.routes import router as calender_router
 from app.modules.notes.routes import router as notes_router
+from app.modules.tasks.routes import router as tasks_router
 
 
 @asynccontextmanager
@@ -51,6 +52,7 @@ app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(calender_router, prefix=settings.API_V1_STR)
 app.include_router(notes_router, prefix=settings.API_V1_STR)
+app.include_router(tasks_router, prefix=settings.API_V1_STR)
 
 @app.get("/health", tags=["System Health"])
 async def health_check(db: AsyncSession = Depends(get_db)):
