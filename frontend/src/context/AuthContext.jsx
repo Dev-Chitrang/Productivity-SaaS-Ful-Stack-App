@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react"
 import { userApi } from "@/features/auth/services/authApi"
+import { clearGuestSession } from "@/features/meetings/utils/guestSession"
 
 const AuthContext = createContext(null)
 
@@ -40,6 +41,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem("access_token")
     localStorage.removeItem("refresh_token")
+    clearGuestSession()
     setUser(null)
   }
 

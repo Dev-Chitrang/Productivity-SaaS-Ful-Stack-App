@@ -1,5 +1,6 @@
-import { Routes, Route, Navigate } from "react-router-dom"
+import { Routes, Route, Navigate, useLocation } from "react-router-dom"
 import { useAuthContext } from "@/context/AuthContext"
+import { hasGuestSessionForMeeting } from "@/features/meetings/utils/guestSession"
 
 import LandingPage from "../pages/LandingPage"
 import AuthPage from "../features/auth/pages/AuthPage"
@@ -11,13 +12,33 @@ import SettingsPage from "../features/settings/pages/SettingsPage"
 import CalendarPage from "../features/calendar/pages/CalendarPage"
 import NotesPage from "../features/notes/pages/NotesPage"
 import TasksPage from "../features/tasks/pages/TasksPage"
+import MeetingsPage from "../features/meetings/pages/MeetingsPage"
+import MeetingDetailPage from "../features/meetings/pages/MeetingDetailPage"
+import MeetingRoomPage from "../features/meetings/pages/MeetingRoomPage"
+import MeetingJoinPage from "../features/meetings/pages/MeetingJoinPage"
 import AuthLayout from "../layouts/AuthLayout"
 import MainLayout from "../layouts/MainLayout"
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuthContext()
+  const location = useLocation()
   if (isLoading) return null
-  if (!isAuthenticated) return <Navigate to="/auth" replace />
+  if (!isAuthenticated) {
+    const match = location.pathname.match(/^\/meetings\/([^/]+)/)
+    if (match) {
+      const meetingId = match[1]
+      if (hasGuestSessionForMeeting(meetingId)) {
+        return children
+      }
+      return (
+        <Navigate
+          to={`/auth?mode=login&meetingId=${meetingId}&redirect=${encodeURIComponent(location.pathname)}`}
+          replace
+        />
+      )
+    }
+    return <Navigate to="/auth" replace />
+  }
   return children
 }
 
@@ -26,6 +47,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth" element={<AuthPage />} />
+      <Route path="/m/:meetingCode" element={<MeetingJoinPage />} />
       <Route element={<AuthLayout />}>
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
@@ -35,6 +57,9 @@ function AppRoutes() {
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/notes" element={<NotesPage />} />
         <Route path="/tasks" element={<TasksPage />} />
+        <Route path="/meetings" element={<MeetingsPage />} />
+        <Route path="/meetings/:id" element={<MeetingDetailPage />} />
+        <Route path="/meetings/:id/room" element={<MeetingRoomPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     JWT_SECRET_KEY: str
     JWT_REFRESH_SECRET_KEY: str
+    MEETING_SESSION_TOKEN_EXPIRE_MINUTES: int
 
     # Redis Configuration
     REDIS_HOST: str
@@ -35,9 +36,19 @@ class Settings(BaseSettings):
     # Google OAuth Configuration
     GOOGLE_CLIENT_ID: str
 
+    STORAGE_BASE_DIR: str
+
     @property
     def async_database_url(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+
+    @property
+    def meeting_storage(self) -> str:
+        return os.path.join(self.STORAGE_BASE_DIR, "meetings")
+
+    @property
+    def transcribe_storage(self) -> str:
+        return os.path.join(self.STORAGE_BASE_DIR, "transcribe")
 
     @field_validator("ENVIRONMENT")
     @classmethod

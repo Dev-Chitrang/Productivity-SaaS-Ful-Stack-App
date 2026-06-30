@@ -39,7 +39,7 @@ export function useSignup() {
   return { signupMutation, verifyMutation, resendMutation }
 }
 
-export function useLogin() {
+export function useLogin({ redirectUrl } = {}) {
   const { loginTokens } = useAuthContext()
   const navigate = useNavigate()
 
@@ -56,7 +56,7 @@ export function useLogin() {
     onSuccess: ({ data }) => {
       toast.success("Logged in successfully.")
       loginTokens(data)
-      navigate("/dashboard")
+      navigate(redirectUrl || "/dashboard")
     },
     onError: (error) => {
       const message = error?.response?.data?.detail || "Verification failed."
