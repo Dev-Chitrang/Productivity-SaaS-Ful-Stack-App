@@ -122,6 +122,14 @@
     @apply border-border outline-ring/50;
   }
 
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
+  * {
+    scrollbar-width: none;
+  }
+
   body {
     @apply bg-background text-foreground;
   }
