@@ -15,3 +15,5 @@ redis
 pwdlib[bcrypt]
 google-auth
 requests
+aiofiles
+python-multipart

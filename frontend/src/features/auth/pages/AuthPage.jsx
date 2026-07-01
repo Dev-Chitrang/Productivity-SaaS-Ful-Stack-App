@@ -22,6 +22,10 @@ import { useLogin, useSignup, useGoogleOAuth } from "../hooks/useAuth"
 import { useAuthContext } from "@/context/AuthContext"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { GoogleButton, OrDivider } from "../components/GoogleButton"
+import toast from "react-hot-toast"
+import { meetingsApi } from "@/features/meetings/api/meetingsApi"
+import { GuestNameForm } from "@/features/meetings/components/GuestNameForm"
+import { saveGuestSession } from "@/features/meetings/utils/guestSession"
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -199,8 +203,8 @@ function SignupForm({ onOtpSent, onLoginSuccess }) {
 // LoginForm
 // ---------------------------------------------------------------------------
 
-function LoginForm({ onOtpSent, onLoginSuccess }) {
-  const { loginMutation } = useLogin()
+function LoginForm({ onOtpSent, onLoginSuccess, redirectUrl }) {
+  const { loginMutation } = useLogin({ redirectUrl })
   const [showPassword, setShowPassword] = useState(false)
 
   const { signIn: googleSignIn, isPending: googlePending } = useGoogleOAuth({
@@ -455,20 +459,81 @@ function AuthPage() {
 
   // Read initial mode from URL, default to login
   const modeParam = searchParams.get("mode")
+  const redirectParam = searchParams.get("redirect")
+  const meetingIdParam = searchParams.get("meetingId")
   const [activeCard, setActiveCard] = useState(
     modeParam === "signup" ? "signup" : "login",
   )
 
   const [otpState, setOtpState] = useState({ show: false, token: null, mode: "signup" })
 
+  // Meeting guest join state
+  const [meeting, setMeeting] = useState(null)
+  const [meetingLoading, setMeetingLoading] = useState(false)
+  const [meetingError, setMeetingError] = useState(null)
+  const [guestMode, setGuestMode] = useState(false)
+  const [joinLoading, setJoinLoading] = useState(false)
+
   useEffect(() => {
-    if (isAuthenticated) navigate("/dashboard", { replace: true })
-  }, [isAuthenticated, navigate])
+    if (isAuthenticated) navigate(redirectParam || "/dashboard", { replace: true })
+  }, [isAuthenticated, navigate, redirectParam])
+
+  // Fetch meeting details when meetingId is present (public endpoint, no auth needed)
+  useEffect(() => {
+    if (!meetingIdParam) return
+    setMeetingLoading(true)
+    setMeetingError(null)
+    setMeeting(null)
+    setGuestMode(false)
+
+    meetingsApi.get(meetingIdParam)
+      .then(({ data }) => {
+        if (data.status === "CANCELLED") {
+          setMeetingError("This meeting has been cancelled.")
+        } else if (data.status === "ENDED") {
+          setMeetingError("This meeting has ended.")
+        } else {
+          setMeeting(data)
+        }
+      })
+      .catch((err) => {
+        const status = err?.response?.status
+        if (status === 404) {
+          setMeetingError("Meeting not found")
+        } else {
+          setMeetingError("Failed to load meeting")
+        }
+      })
+      .finally(() => setMeetingLoading(false))
+  }, [meetingIdParam])
+
+  async function handleGuestJoin(guestName) {
+    setJoinLoading(true)
+    try {
+      const { data } = await meetingsApi.join(meetingIdParam, { guest_name: guestName })
+      saveGuestSession({ meetingId: meetingIdParam, guestName })
+      navigate(`/meetings/${meetingIdParam}/room`, {
+        state: { guestName, sessionToken: data.meeting_session_token },
+      })
+    } catch (err) {
+      const detail = err?.response?.data?.detail
+      toast.error(detail || "Failed to join meeting.")
+    } finally {
+      setJoinLoading(false)
+    }
+  }
 
   // Sync URL param with activeCard
   useEffect(() => {
-    setSearchParams({ mode: activeCard }, { replace: true })
-  }, [activeCard, setSearchParams])
+    const params = { mode: activeCard }
+    if (redirectParam) {
+      params.redirect = redirectParam
+    }
+    if (meetingIdParam) {
+      params.meetingId = meetingIdParam
+    }
+    setSearchParams(params, { replace: true })
+  }, [activeCard, setSearchParams, redirectParam, meetingIdParam])
 
   function handleOtpSent(token, mode) {
     setOtpState({ show: true, token, mode })
@@ -485,7 +550,7 @@ function AuthPage() {
 
   function handleLoginSuccess(tokens) {
     loginTokens(tokens)
-    navigate("/dashboard")
+    navigate(redirectParam || "/dashboard")
   }
 
   const signupInactive = activeCard !== "signup"
@@ -595,7 +660,7 @@ function AuthPage() {
                 Enter your credentials to access your account.
               </p>
             </div>
-            <LoginForm onOtpSent={handleOtpSent} onLoginSuccess={handleLoginSuccess} />
+            <LoginForm onOtpSent={handleOtpSent} onLoginSuccess={handleLoginSuccess} redirectUrl={redirectParam} />
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
               <button
@@ -609,6 +674,68 @@ function AuthPage() {
           </div>
         </motion.div>
       </div>
+
+      {/* ---- Meeting guest section (only when meetingId is present) ---- */}
+      {meetingIdParam && (
+        <div className="w-full max-w-[460px] mt-8">
+          {meetingLoading && (
+            <div className="flex justify-center py-4">
+              <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          )}
+
+          {meetingError && (
+            <div className="rounded-xl border border-border bg-card px-6 py-8 text-center">
+              <p className="text-sm text-muted-foreground">{meetingError}</p>
+            </div>
+          )}
+
+          {!meetingLoading && !meetingError && meeting && (
+            <>
+              {/* OR divider */}
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">OR</span>
+                </div>
+              </div>
+
+              {!guestMode ? (
+                <div className="space-y-3">
+                  <p className="text-center text-sm text-muted-foreground">
+                    Joining &ldquo;{meeting.title}&rdquo;
+                  </p>
+                  <Button
+                    size="lg"
+                    variant="outline"
+                    className="w-full gap-2"
+                    onClick={() => setGuestMode(true)}
+                  >
+                    <User className="size-4" />
+                    Continue as Guest
+                  </Button>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-border bg-card px-6 py-6 space-y-4">
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">Join as Guest</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Enter your name to join &ldquo;{meeting.title}&rdquo;
+                    </p>
+                  </div>
+                  <GuestNameForm
+                    onJoin={handleGuestJoin}
+                    isPending={joinLoading}
+                    onCancel={() => setGuestMode(false)}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
