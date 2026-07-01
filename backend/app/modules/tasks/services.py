@@ -137,6 +137,9 @@ class TaskService:
         }])
         return res
 
+    async def get_analytics(self, user_id: UUID) -> dict:
+        return await self.repo.get_analytics(user_id)
+
     async def list_and_filter_tasks(
         self,
         user_id: UUID,

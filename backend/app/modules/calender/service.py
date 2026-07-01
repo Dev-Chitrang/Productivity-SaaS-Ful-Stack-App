@@ -78,6 +78,9 @@ class CalendarService:
     # Listing
     # ------------------------------------------------------------------
 
+    async def get_analytics(self, user_id: UUID) -> dict:
+        return await self.repo.get_analytics(user_id)
+
     async def list_events(
         self,
         user_id: UUID,

@@ -36,6 +36,18 @@ async def create_event_endpoint(
 
 
 @router.get(
+    "/analytics",
+    status_code=status.HTTP_200_OK,
+)
+async def calendar_analytics_endpoint(
+    current_user_id: UUID = Depends(get_current_user_id),
+    service=Depends(get_calendar_service),
+):
+    ctrl = CalendarController(service)
+    return await ctrl.get_analytics(current_user_id)
+
+
+@router.get(
     "/events/{event_id}",
     status_code=status.HTTP_200_OK,
     response_model=CalendarEventResponse,

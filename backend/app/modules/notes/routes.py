@@ -36,6 +36,14 @@ async def list_notes_endpoint(
         current_user_id, search, category, tag, favorite, pinned, archived, deleted, sort_by, sort_order
     )
 
+@router.get("/analytics", status_code=status.HTTP_200_OK)
+async def notes_analytics_endpoint(
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_notes_service)
+):
+    ctrl = NoteController(service)
+    return await ctrl.get_analytics(current_user_id)
+
 @router.get("/{note_id}", status_code=status.HTTP_200_OK, response_model=NoteResponse)
 async def get_note_endpoint(
     note_id: UUID,

@@ -115,6 +115,9 @@ class NoteController:
         except NoteAccessDeniedException as e:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
+    async def get_analytics(self, user_id: UUID) -> dict:
+        return await self.service.get_analytics(user_id)
+
     async def list_user_notes(
         self,
         user_id: UUID,

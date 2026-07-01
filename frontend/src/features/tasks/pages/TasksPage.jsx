@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react"
-import { Plus, Filter } from "lucide-react"
+import { Plus, Filter, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useTasks, useTask, useCreateTask, useUpdateTask, useDeleteTask, useRestoreTask, useToggleArchive, useTogglePin, useToggleFavorite } from "../hooks/useTasksApi"
 import { SearchBar } from "../components/SearchBar"
@@ -9,6 +9,8 @@ import { FilterPanel } from "../components/FilterPanel"
 import { DeleteTaskDialog, RestoreTaskDialog, ArchiveTaskDialog } from "../components/ConfirmDialogs"
 import { toCreatePayload, toUpdatePayload } from "../api/tasksMapper"
 import { getEmptyDoc } from "@/shared/editor"
+import { useModuleSidebarCollapse } from "@/hooks/useModuleSidebarCollapse"
+import { cn } from "@/lib/utils"
 
 export default function TasksPage() {
     const [search, setSearch] = useState("")
@@ -24,6 +26,7 @@ export default function TasksPage() {
     const [mobileView, setMobileView] = useState("list")
     const resizeRef = useRef(null)
     const [leftWidth, setLeftWidth] = useState(320)
+    const { collapsed: sidebarCollapsed, toggleSidebar: toggleSidebarCollapse, sidebarWidth } = useModuleSidebarCollapse("tasks_sidebar_collapsed", 320)
     const creatingRef = useRef(false)
 
     const queryFilters = useMemo(() => ({
@@ -223,38 +226,68 @@ export default function TasksPage() {
         <div className="flex flex-col h-full">
             <div className="hidden lg:flex flex-1 overflow-hidden">
                 <div
-                    className="flex flex-col border-r border-border overflow-hidden shrink-0"
-                    style={{ width: leftWidth }}
+                    className="flex flex-col border-r border-border overflow-hidden shrink-0 transition-[width] duration-200 ease-in-out"
+                    style={{ width: sidebarCollapsed ? 52 : leftWidth }}
                 >
-                    <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-                        <SearchBar value={search} onChange={setSearch} className="flex-1" />
-                        <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            onClick={() => setFilterOpen(!filterOpen)}
-                            aria-label="Toggle filters"
-                            data-active={filterOpen || Object.values(filters).some(Boolean)}
-                            className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
-                        >
-                            <Filter className="size-4" />
-                        </Button>
-                        <Button variant="default" size="icon-sm" onClick={handleCreateTask} aria-label="Create task">
-                            <Plus className="size-4" />
-                        </Button>
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
+                        {sidebarCollapsed ? (
+                            <button
+                                type="button"
+                                onClick={toggleSidebarCollapse}
+                                className="flex items-center justify-center size-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 mx-auto"
+                                aria-label="Expand sidebar"
+                            >
+                                <ChevronLeft
+                                    className={cn(
+                                        "size-4 transition-transform duration-200",
+                                        "rotate-180",
+                                    )}
+                                />
+                            </button>
+                        ) : (
+                            <>
+                                <SearchBar value={search} onChange={setSearch} className="flex-1" />
+                                <Button
+                                    variant="ghost"
+                                    size="icon-sm"
+                                    onClick={() => setFilterOpen(!filterOpen)}
+                                    aria-label="Toggle filters"
+                                    data-active={filterOpen || Object.values(filters).some(Boolean)}
+                                    className="data-[active=true]:bg-primary/10 data-[active=true]:text-primary"
+                                >
+                                    <Filter className="size-4" />
+                                </Button>
+                                <Button variant="default" size="icon-sm" onClick={handleCreateTask} aria-label="Create task">
+                                    <Plus className="size-4" />
+                                </Button>
+                                <button
+                                    type="button"
+                                    onClick={toggleSidebarCollapse}
+                                    className="flex items-center justify-center size-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                                    aria-label="Collapse sidebar"
+                                >
+                                    <ChevronLeft className="size-4 transition-transform duration-200" />
+                                </button>
+                            </>
+                        )}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto">
-                        {taskListContent}
-                    </div>
+                    {!sidebarCollapsed && (
+                        <div className="flex-1 overflow-y-auto">
+                            {taskListContent}
+                        </div>
+                    )}
                 </div>
 
-                <div
-                    ref={resizeRef}
-                    className="w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 shrink-0 transition-colors relative"
-                    onMouseDown={handleMouseDown}
-                >
-                    <div className="absolute inset-y-0 -left-1 -right-1" />
-                </div>
+                {!sidebarCollapsed && (
+                    <div
+                        ref={resizeRef}
+                        className="w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 shrink-0 transition-colors relative"
+                        onMouseDown={handleMouseDown}
+                    >
+                        <div className="absolute inset-y-0 -left-1 -right-1" />
+                    </div>
+                )}
 
                 {filterOpen && (
                     <FilterPanel

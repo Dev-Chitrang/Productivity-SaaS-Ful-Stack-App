@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Sequence, List
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +57,59 @@ class NoteRepository:
         except Exception:
             await self.db.rollback()
             raise
+
+    async def get_analytics(self, user_id: UUID) -> dict:
+        from sqlalchemy import func as sqlfunc, cast, Date
+        total = await self.db.scalar(
+            select(sqlfunc.count(Note.id)).where(and_(Note.user_id == user_id, Note.deleted_at.is_(None)))
+        )
+        favorite = await self.db.scalar(
+            select(sqlfunc.count(Note.id)).where(and_(Note.user_id == user_id, Note.deleted_at.is_(None), Note.is_favorite == True))
+        )
+        archived = await self.db.scalar(
+            select(sqlfunc.count(Note.id)).where(and_(Note.user_id == user_id, Note.deleted_at.is_(None), Note.is_archived == True))
+        )
+        now = datetime.now(timezone.utc)
+        six_months_ago = now - timedelta(days=180)
+        month_expr = sqlfunc.date_trunc("month", Note.created_at).label("month")
+        monthly_counts = await self.db.execute(
+            select(
+                month_expr,
+                sqlfunc.count(Note.id).label("count"),
+            )
+            .where(
+                and_(
+                    Note.user_id == user_id,
+                    Note.deleted_at.is_(None),
+                    Note.created_at >= six_months_ago,
+                )
+            )
+            .group_by(month_expr)
+            .order_by(month_expr)
+        )
+        monthly_data = [{"month": row.month.isoformat(), "count": row.count} for row in monthly_counts]
+        recent_stmt = (
+            select(Note)
+            .where(and_(Note.user_id == user_id, Note.deleted_at.is_(None)))
+            .order_by(desc(Note.updated_at))
+            .limit(5)
+        )
+        recent_result = await self.db.execute(recent_stmt)
+        recent_notes = [
+            {
+                "id": str(n.id),
+                "title": n.title,
+                "updated_at": n.updated_at.isoformat(),
+            }
+            for n in recent_result.scalars().all()
+        ]
+        return {
+            "total": total or 0,
+            "favorite": favorite or 0,
+            "archived": archived or 0,
+            "recent_notes": recent_notes,
+            "monthly_created": monthly_data,
+        }
 
     async def list_and_filter(
         self,

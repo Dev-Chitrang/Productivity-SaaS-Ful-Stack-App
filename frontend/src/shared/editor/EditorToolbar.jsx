@@ -1,4 +1,4 @@
-import { useCallback } from "react"
+import { useState, useCallback } from "react"
 import {
     Bold, Italic, Underline, Strikethrough,
     Heading1, Heading2, Heading3,
@@ -8,11 +8,14 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { TableDialog } from "./TableDialog"
 
 export function EditorToolbar({ editor }) {
-    const addTable = useCallback(() => {
+    const [tableDialogOpen, setTableDialogOpen] = useState(false)
+
+    const handleTableInsert = useCallback((rows, cols) => {
         if (!editor || editor.isDestroyed) return
-        editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+        editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run()
     }, [editor])
 
     if (!editor || editor.isDestroyed) return null
@@ -41,31 +44,38 @@ export function EditorToolbar({ editor }) {
         [
             { icon: Quote, action: () => editor.chain().focus().toggleBlockquote().run(), label: "Blockquote", active: editor.isActive("blockquote") },
             { icon: Code2, action: () => editor.chain().focus().toggleCodeBlock().run(), label: "Code Block", active: editor.isActive("codeBlock") },
-            { icon: Table, action: addTable, label: "Table" },
+            { icon: Table, action: () => setTableDialogOpen(true), label: "Table" },
             { icon: Minus, action: () => editor.chain().focus().setHorizontalRule().run(), label: "Horizontal Rule" },
         ],
     ]
 
     return (
-        <div className="flex flex-wrap items-center gap-0.5 px-3 py-1.5 border-b border-border bg-muted/30 overflow-x-auto">
-            {groups.map((group, gi) => (
-                <div key={gi} className="flex items-center gap-0.5">
-                    {gi > 0 && <Separator orientation="vertical" className="h-5 mx-1" />}
-                    {group.map((btn, bi) => (
-                        <Button
-                            key={bi}
-                            variant={btn.active ? "secondary" : "ghost"}
-                            size="icon-xs"
-                            onClick={btn.action}
-                            disabled={btn.disabled}
-                            title={btn.label}
-                            aria-label={btn.label}
-                        >
-                            <btn.icon className="size-3.5" />
-                        </Button>
-                    ))}
-                </div>
-            ))}
-        </div>
+        <>
+            <div className="flex flex-wrap items-center gap-0.5 px-3 py-1.5 border-b border-border bg-muted/30 overflow-x-auto">
+                {groups.map((group, gi) => (
+                    <div key={gi} className="flex items-center gap-0.5">
+                        {gi > 0 && <Separator orientation="vertical" className="h-5 mx-1" />}
+                        {group.map((btn, bi) => (
+                            <Button
+                                key={bi}
+                                variant={btn.active ? "secondary" : "ghost"}
+                                size="icon-xs"
+                                onClick={btn.action}
+                                disabled={btn.disabled}
+                                title={btn.label}
+                                aria-label={btn.label}
+                            >
+                                <btn.icon className="size-3.5" />
+                            </Button>
+                        ))}
+                    </div>
+                ))}
+            </div>
+            <TableDialog
+                open={tableDialogOpen}
+                onOpenChange={setTableDialogOpen}
+                onInsert={handleTableInsert}
+            />
+        </>
     )
 }
