@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Sequence, List
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -58,6 +58,105 @@ class TaskRepository:
         except Exception:
             await self.db.rollback()
             raise
+
+    async def get_analytics(self, user_id: UUID) -> dict:
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+
+        total = await self.db.scalar(
+            select(func.count(Task.id)).where(and_(Task.user_id == user_id, Task.deleted_at.is_(None)))
+        )
+        today_count = await self.db.scalar(
+            select(func.count(Task.id)).where(
+                and_(Task.user_id == user_id, Task.deleted_at.is_(None), Task.due_date >= today_start, Task.due_date < today_end)
+            )
+        )
+        overdue = await self.db.scalar(
+            select(func.count(Task.id)).where(
+                and_(Task.user_id == user_id, Task.deleted_at.is_(None), Task.due_date < today_start, Task.status != TaskStatus.DONE)
+            )
+        )
+        upcoming = await self.db.scalar(
+            select(func.count(Task.id)).where(
+                and_(Task.user_id == user_id, Task.deleted_at.is_(None), Task.due_date >= today_end)
+            )
+        )
+
+        priority_rows = await self.db.execute(
+            select(Task.priority, func.count(Task.id).label("count"))
+            .where(and_(Task.user_id == user_id, Task.deleted_at.is_(None)))
+            .group_by(Task.priority)
+        )
+        priority_distribution = {row.priority.value: row.count for row in priority_rows}
+
+        status_rows = await self.db.execute(
+            select(Task.status, func.count(Task.id).label("count"))
+            .where(and_(Task.user_id == user_id, Task.deleted_at.is_(None)))
+            .group_by(Task.status)
+        )
+        status_distribution = {row.status.value: row.count for row in status_rows}
+
+        due_today_stmt = (
+            select(Task)
+            .where(
+                and_(
+                    Task.user_id == user_id,
+                    Task.deleted_at.is_(None),
+                    Task.due_date >= today_start,
+                    Task.due_date < today_end,
+                )
+            )
+            .order_by(asc(Task.due_date))
+            .limit(10)
+        )
+        due_today_result = await self.db.execute(due_today_stmt)
+        due_today = [
+            {
+                "id": str(t.id),
+                "title": t.title,
+                "status": t.status.value if t.status else None,
+                "priority": t.priority.value if t.priority else None,
+                "due_date": t.due_date.isoformat() if t.due_date else None,
+            }
+            for t in due_today_result.scalars().all()
+        ]
+
+        overdue_stmt = (
+            select(Task)
+            .where(
+                and_(
+                    Task.user_id == user_id,
+                    Task.deleted_at.is_(None),
+                    Task.due_date < today_start,
+                    Task.status != TaskStatus.DONE,
+                )
+            )
+            .order_by(asc(Task.due_date))
+            .limit(10)
+        )
+        overdue_result = await self.db.execute(overdue_stmt)
+        overdue_tasks = [
+            {
+                "id": str(t.id),
+                "title": t.title,
+                "status": t.status.value if t.status else None,
+                "priority": t.priority.value if t.priority else None,
+                "due_date": t.due_date.isoformat() if t.due_date else None,
+            }
+            for t in overdue_result.scalars().all()
+        ]
+
+        return {
+            "total": total or 0,
+            "today": today_count or 0,
+            "overdue": overdue or 0,
+            "upcoming": upcoming or 0,
+            "priority_distribution": priority_distribution,
+            "status_distribution": status_distribution,
+            "due_today": due_today,
+            "overdue_tasks": overdue_tasks,
+        }
 
     async def list_and_filter(
         self,

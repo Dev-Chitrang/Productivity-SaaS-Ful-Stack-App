@@ -137,4 +137,46 @@
   html {
     @apply font-mono;
   }
+
+  /* TipTap table styles */
+  .ProseMirror table {
+    @apply w-full border-collapse my-2;
+    border: 1px solid var(--border);
+  }
+
+  .ProseMirror th,
+  .ProseMirror td {
+    @apply px-3 py-2 text-left text-xs;
+    border: 1px solid var(--border);
+    min-width: 80px;
+  }
+
+  .ProseMirror th {
+    @apply bg-muted font-medium text-foreground;
+  }
+
+  .ProseMirror td {
+    @apply bg-card text-card-foreground;
+  }
+
+  .ProseMirror th p,
+  .ProseMirror td p {
+    @apply m-0;
+  }
+
+  .ProseMirror .selectedCell {
+    @apply bg-primary/5;
+  }
+
+  .dark .ProseMirror td {
+    @apply bg-card;
+  }
+
+  .dark .ProseMirror th {
+    @apply bg-muted;
+  }
+
+  .ProseMirror table .column-resize-handle {
+    @apply absolute pointer-events-none w-0.5 bg-primary bottom-0 right-[-2px] top-0;
+  }
 }

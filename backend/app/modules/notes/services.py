@@ -64,6 +64,9 @@ class NoteService:
         note = await self.get_note(user_id, note_id, include_deleted=False)
         return await self.repo.update(note, {"is_favorite": favorite})
 
+    async def get_analytics(self, user_id: UUID) -> dict:
+        return await self.repo.get_analytics(user_id)
+
     async def list_and_filter_notes(
         self,
         user_id: UUID,

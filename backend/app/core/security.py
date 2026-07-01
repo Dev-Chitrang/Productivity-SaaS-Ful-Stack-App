@@ -30,5 +30,5 @@ class SecurityEngine:
     def generate_auth_tokens(cls, user_id: str, email: str) -> Dict[str, str]:
         payload = {"sub": user_id, "email": email}
         access_token = cls.create_token(payload, timedelta(minutes=15), settings.JWT_SECRET_KEY)
-        refresh_token = cls.create_token(payload, timedelta(days=7), settings.JWT_SECRET_KEY)
+        refresh_token = cls.create_token(payload, timedelta(days=7), settings.JWT_REFRESH_SECRET_KEY)
         return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}

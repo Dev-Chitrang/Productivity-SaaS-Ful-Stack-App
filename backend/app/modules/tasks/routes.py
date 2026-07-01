@@ -40,6 +40,14 @@ async def list_tasks_endpoint(
         current_user_id, search, status_filter, priority, label, favorite, pinned, archived, deleted, due_date, sort_by, sort_order
     )
 
+@router.get("/analytics", status_code=status.HTTP_200_OK)
+async def tasks_analytics_endpoint(
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_tasks_service)
+):
+    ctrl = TaskController(service)
+    return await ctrl.get_analytics(current_user_id)
+
 @router.get("/{task_id}", status_code=status.HTTP_200_OK, response_model=TaskResponse)
 async def get_task_endpoint(
     task_id: UUID,

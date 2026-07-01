@@ -1,6 +1,8 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react"
-import { Plus } from "lucide-react"
+import { Plus, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useModuleSidebarCollapse } from "@/hooks/useModuleSidebarCollapse"
+import { cn } from "@/lib/utils"
 import {
     useWhiteboards,
     useWhiteboard,
@@ -52,6 +54,7 @@ export default function WhiteboardPage() {
 
     const [mobileView, setMobileView] = useState("list")
     const [leftWidth, setLeftWidth] = useState(280)
+    const { collapsed: sidebarCollapsed, toggleSidebar: toggleSidebarCollapse, sidebarWidth } = useModuleSidebarCollapse("whiteboards_sidebar_collapsed", 280)
 
     const onSelectElement = useCallback((id) => {
         setSelectedId(id)
@@ -355,27 +358,59 @@ export default function WhiteboardPage() {
         <div className="flex flex-col h-full">
             <div className="hidden lg:flex flex-1">
                 <div
-                    className="flex flex-col border-r border-border overflow-hidden shrink-0"
-                    style={{ width: leftWidth }}
+                    className="flex flex-col border-r border-border overflow-hidden shrink-0 transition-[width] duration-200 ease-in-out"
+                    style={{ width: sidebarCollapsed ? 52 : leftWidth }}
                 >
-                    <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
-                        <WhiteboardSearchBar value={search} onChange={setSearch} className="flex-1" />
-                        <Button variant="default" size="icon-sm" onClick={handleCreateBoard} aria-label="Create whiteboard">
-                            <Plus className="size-4" />
-                        </Button>
+                    <div className="flex items-center gap-2 px-3 py-2 border-b border-border shrink-0">
+                        {sidebarCollapsed ? (
+                            <button
+                                type="button"
+                                onClick={toggleSidebarCollapse}
+                                className="flex items-center justify-center size-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0 mx-auto"
+                                aria-label="Expand sidebar"
+                            >
+                                <ChevronLeft
+                                    className={cn(
+                                        "size-4 transition-transform duration-200",
+                                        "rotate-180",
+                                    )}
+                                />
+                            </button>
+                        ) : (
+                            <>
+                                <WhiteboardSearchBar value={search} onChange={setSearch} className="flex-1" />
+                                <Button variant="default" size="icon-sm" onClick={handleCreateBoard} aria-label="Create whiteboard">
+                                    <Plus className="size-4" />
+                                </Button>
+                                <button
+                                    type="button"
+                                    onClick={toggleSidebarCollapse}
+                                    className="flex items-center justify-center size-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0"
+                                    aria-label="Collapse sidebar"
+                                >
+                                    <ChevronLeft className="size-4 transition-transform duration-200" />
+                                </button>
+                            </>
+                        )}
                     </div>
-                    <WhiteboardFilterPanel activeFilter={activeFilter} onChange={setActiveFilter} />
-                    <div className="flex-1 overflow-y-auto">
-                        {boardListContent}
-                    </div>
+                    {!sidebarCollapsed && (
+                        <>
+                            <WhiteboardFilterPanel activeFilter={activeFilter} onChange={setActiveFilter} />
+                            <div className="flex-1 overflow-y-auto">
+                                {boardListContent}
+                            </div>
+                        </>
+                    )}
                 </div>
 
-                <div
-                    className="w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 shrink-0 transition-colors relative"
-                    onMouseDown={handleMouseDown}
-                >
-                    <div className="absolute inset-y-0 -left-1 -right-1" />
-                </div>
+                {!sidebarCollapsed && (
+                    <div
+                        className="w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 shrink-0 transition-colors relative"
+                        onMouseDown={handleMouseDown}
+                    >
+                        <div className="absolute inset-y-0 -left-1 -right-1" />
+                    </div>
+                )}
 
                 <div className="flex-1 flex flex-col">
                     {isCanvasReady ? (

@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Sequence
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, asc
+from sqlalchemy import select, and_, or_, asc, func
 
 from app.models.calender import CalendarEvent
 from app.modules.calender.enums import EventType, EventColor
@@ -60,6 +60,94 @@ class CalendarRepository:
     # ------------------------------------------------------------------
     # Listing / querying
     # ------------------------------------------------------------------
+
+    async def get_analytics(self, user_id: UUID) -> dict:
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+
+        total = await self.db.scalar(
+            select(func.count(CalendarEvent.id)).where(and_(CalendarEvent.user_id == user_id, CalendarEvent.deleted_at.is_(None)))
+        )
+        today_count = await self.db.scalar(
+            select(func.count(CalendarEvent.id)).where(
+                and_(
+                    CalendarEvent.user_id == user_id,
+                    CalendarEvent.deleted_at.is_(None),
+                    CalendarEvent.start_time < today_end,
+                    CalendarEvent.end_time > today_start,
+                )
+            )
+        )
+        upcoming = await self.db.scalar(
+            select(func.count(CalendarEvent.id)).where(
+                and_(CalendarEvent.user_id == user_id, CalendarEvent.deleted_at.is_(None), CalendarEvent.start_time >= today_end)
+            )
+        )
+
+        six_months_ago = now - timedelta(days=180)
+        month_expr = func.date_trunc("month", CalendarEvent.start_time).label("month")
+        monthly_rows = await self.db.execute(
+            select(
+                month_expr,
+                func.count(CalendarEvent.id).label("count"),
+            )
+            .where(
+                and_(
+                    CalendarEvent.user_id == user_id,
+                    CalendarEvent.deleted_at.is_(None),
+                    CalendarEvent.start_time >= six_months_ago,
+                )
+            )
+            .group_by(month_expr)
+            .order_by(month_expr)
+        )
+        monthly_data = [{"month": row.month.isoformat(), "count": row.count} for row in monthly_rows]
+
+        past = await self.db.scalar(
+            select(func.count(CalendarEvent.id)).where(
+                and_(CalendarEvent.user_id == user_id, CalendarEvent.deleted_at.is_(None), CalendarEvent.end_time < now)
+            )
+        )
+        future = await self.db.scalar(
+            select(func.count(CalendarEvent.id)).where(
+                and_(CalendarEvent.user_id == user_id, CalendarEvent.deleted_at.is_(None), CalendarEvent.start_time >= now)
+            )
+        )
+
+        next_events_stmt = (
+            select(CalendarEvent)
+            .where(
+                and_(
+                    CalendarEvent.user_id == user_id,
+                    CalendarEvent.deleted_at.is_(None),
+                    CalendarEvent.start_time >= now,
+                )
+            )
+            .order_by(asc(CalendarEvent.start_time))
+            .limit(3)
+        )
+        next_events_result = await self.db.execute(next_events_stmt)
+        next_events = [
+            {
+                "id": str(e.id),
+                "title": e.title,
+                "start_time": e.start_time.isoformat(),
+                "end_time": e.end_time.isoformat(),
+                "color": e.color.value if e.color else None,
+            }
+            for e in next_events_result.scalars().all()
+        ]
+
+        return {
+            "total": total or 0,
+            "today": today_count or 0,
+            "upcoming": upcoming or 0,
+            "monthly_events": monthly_data,
+            "past_events": past or 0,
+            "future_events": future or 0,
+            "next_events": next_events,
+        }
 
     async def list_events(
         self,
