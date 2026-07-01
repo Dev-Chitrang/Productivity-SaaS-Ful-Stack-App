@@ -12,6 +12,7 @@ import SettingsPage from "../features/settings/pages/SettingsPage"
 import CalendarPage from "../features/calendar/pages/CalendarPage"
 import NotesPage from "../features/notes/pages/NotesPage"
 import TasksPage from "../features/tasks/pages/TasksPage"
+import WhiteboardPage from "../features/whiteboards/pages/WhiteboardPage"
 import MeetingsPage from "../features/meetings/pages/MeetingsPage"
 import MeetingDetailPage from "../features/meetings/pages/MeetingDetailPage"
 import MeetingRoomPage from "../features/meetings/pages/MeetingRoomPage"
@@ -60,6 +61,7 @@ function AppRoutes() {
         <Route path="/meetings" element={<MeetingsPage />} />
         <Route path="/meetings/:id" element={<MeetingDetailPage />} />
         <Route path="/meetings/:id/room" element={<MeetingRoomPage />} />
+        <Route path="/whiteboards" element={<WhiteboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
