@@ -194,7 +194,16 @@ function MeetingDetailPage() {
     )
   }
 
-  const showJoin = isActive || isCreated || isIdle
+  const isScheduled = meeting?.meeting_type === "SCHEDULED"
+
+  const canJoinScheduled = !isScheduled
+    || meeting?.can_join === true
+    || (meeting?.can_join !== false
+      && (!meeting?.scheduled_date || !meeting?.scheduled_time
+        || new Date() >= new Date(`${meeting.scheduled_date}T${meeting.scheduled_time}`)))
+
+  const showJoin = (isActive || isCreated || isIdle) && canJoinScheduled
+  const showJoinBlocked = isScheduled && (isActive || isCreated || isIdle) && !canJoinScheduled
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
@@ -209,6 +218,23 @@ function MeetingDetailPage() {
           Back
         </Button>
       </div>
+
+      {showJoinBlocked && (
+        <Card className="mb-4 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+          <CardContent className="flex items-center justify-between py-3">
+            <div className="flex items-center gap-2">
+              <Clock className="size-4 text-amber-600 dark:text-amber-400" />
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">
+                This meeting has not started yet.
+              </span>
+            </div>
+            <Button size="sm" disabled variant="outline">
+              <Video className="size-3.5" />
+              Join Now
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {showJoin && (
         <Card className="mb-4 border-primary/20 bg-primary/5">

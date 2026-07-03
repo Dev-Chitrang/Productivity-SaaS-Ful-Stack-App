@@ -1,13 +1,13 @@
 from datetime import datetime, timezone, timedelta
 import jwt
-from typing import Optional, Sequence
+from typing import Optional, Sequence, List
 from uuid import UUID
 
 from app.core.storage import StorageService
 from app.modules.meetings.repository import MeetingRepository
-from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript
-from app.modules.meetings.schemas import MeetingCreate, MeetingUpdate
-from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus
+from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation
+from app.modules.meetings.schemas import MeetingCreate, MeetingUpdate, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse
+from app.modules.meetings.enums import MeetingStatus, MeetingType, ParticipantType, ParticipantStatus
 from app.modules.meetings.exceptions import (
     MeetingNotFoundException,
     MeetingAccessDeniedException,
@@ -15,6 +15,7 @@ from app.modules.meetings.exceptions import (
 )
 from app.core.config import settings
 from app.core.logger import logger
+from app.workers.tasks import send_meeting_invitation
 
 class MeetingService:
     def __init__(self, repo: MeetingRepository, storage: StorageService):
@@ -28,6 +29,7 @@ class MeetingService:
         meeting = await self.repo.get_by_id(meeting_id)
         if not meeting:
             raise MeetingNotFoundException(meeting_id)
+        meeting.invited_participants_count = await self.repo.count_invitations(meeting_id)
         return meeting
 
     async def update_meeting(self, user_id: UUID, meeting_id: UUID, payload: MeetingUpdate) -> Meeting:
@@ -88,6 +90,7 @@ class MeetingService:
         if meeting.deleted_at:
             raise MeetingNotFoundException("This meeting no longer exists.")
         host_name = await self.repo.get_user_name_by_id(meeting.host_id) or "Unknown"
+        meeting.invited_participants_count = await self.repo.count_invitations(meeting.id)
         return meeting, host_name
 
     async def leave_meeting_flow(self, meeting_id: UUID, user_id: Optional[UUID] = None, guest_email: Optional[str] = None) -> None:
@@ -193,6 +196,24 @@ class MeetingService:
             meeting.status = MeetingStatus.ACTIVE
 
         is_host = (user_id is not None and meeting.host_id == user_id)
+
+        if meeting.meeting_type == MeetingType.SCHEDULED and not is_host:
+            now = datetime.now(timezone.utc)
+            earliest_join_time = meeting.scheduled_start - timedelta(minutes=15)
+
+            if now < earliest_join_time:
+                raise MeetingValidationError(f"This meeting is locked. You can join starting 15 minutes before scheduled start time.")
+            target_email = None
+            if user_id:
+                user_record = await self.repo.get_user_by_id(user_id)
+                target_email = user_record.email if user_record else None
+            else:
+                if not guest_email:
+                    raise MeetingValidationError("An invited email validation parameter is required to join this session.")
+                target_email = guest_email
+            if not target_email or not (await self.repo.get_invitation_by_email(meeting_id, target_email)):
+                raise MeetingAccessDeniedException(meeting_id, user_id or UUID(int=0))
+        initial_status = ParticipantStatus.ADMITTED if is_host else ParticipantStatus.WAITING
 
         if is_host and meeting.status == MeetingStatus.CREATED:
             await self.repo.update(meeting, {"status": MeetingStatus.ACTIVE})
@@ -410,3 +431,110 @@ class MeetingService:
         expire = datetime.now(timezone.utc) + timedelta(minutes=settings.MEETING_SESSION_TOKEN_EXPIRE_MINUTES)
         payload["exp"] = int(expire.timestamp())
         return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
+
+    async def create_scheduled_meeting(self, host_id: UUID, payload: ScheduledMeetingCreate) -> Meeting:
+        data = payload.model_dump(exclude={"invitations"})
+        data["meeting_type"] = MeetingType.SCHEDULED
+        data["status"] = MeetingStatus.SCHEDULED
+        data["scheduled_by"] = host_id
+
+        meeting = await self.repo.create(host_id, data)
+
+        formatted_date = payload.scheduled_start.strftime('%Y-%m-%d')
+        formatted_time = payload.scheduled_start.strftime('%H:%M')
+        meeting_link = f"{settings.FRONTEND_URL}/meetings/{meeting.id}"
+
+        host = await self.repo.get_user_by_id(host_id)
+        host_name = host.full_name if host else "Host"
+        host_email = host.email if host else None
+
+        # Build invited participants list string
+        invited_names = "\n".join(
+            f"  - {invite.name} ({invite.email})"
+            for invite in payload.invitations
+        )
+
+        # Send host confirmation email
+        host_subject = f"Meeting Scheduled: {meeting.title}"
+        host_body = (
+            f"Hello {host_name},\n\n"
+            f"Your meeting has been scheduled successfully.\n\n"
+            f"Title: {meeting.title}\n"
+            f"Description: {meeting.description or 'No description provided'}\n"
+            f"Date: {formatted_date}\n"
+            f"Time: {formatted_time}\n"
+            f"Timezone: {payload.timezone}\n"
+            f"Meeting Link: {meeting_link}\n\n"
+            f"Invited Participants:\n{invited_names}\n\n"
+            f"You can manage this meeting from your dashboard."
+        )
+
+        if host_email:
+            try:
+                send_meeting_invitation.delay(
+                    recipient=host_email,
+                    subject=host_subject,
+                    body=host_body
+                )
+            except Exception as e:
+                logger.error(f"Failed to send host invitation email for meeting {meeting.id}: {e}")
+
+        # Send participant invitations
+        for invite in payload.invitations:
+            db_invite = await self.repo.create_invitation(meeting.id, invite.model_dump())
+
+            participant_subject = f"Invitation: {meeting.title}"
+            participant_body = (
+                f"Hello {db_invite.name},\n\n"
+                f"You have been invited to a meeting by {host_name}.\n\n"
+                f"Title: {meeting.title}\n"
+                f"Date: {formatted_date}\n"
+                f"Time: {formatted_time}\n"
+                f"Timezone: {payload.timezone}\n"
+                f"Agenda: {meeting.agenda or 'No agenda provided'}\n"
+                f"Meeting Link: {meeting_link}\n\n"
+                f"See you there!"
+            )
+
+            try:
+                send_meeting_invitation.delay(
+                    recipient=db_invite.email,
+                    subject=participant_subject,
+                    body=participant_body
+                )
+            except Exception as e:
+                logger.error(f"Failed to send invitation email to {db_invite.email} for meeting {meeting.id}: {e}")
+
+        meeting.invited_participants_count = len(payload.invitations)
+        return meeting
+
+    async def add_invitations(self, user_id: UUID, meeting_id: UUID, invites: List[InvitationCreate]) -> List[MeetingInvitation]:
+        meeting = await self.get_meeting(meeting_id)
+        if meeting.host_id != user_id:
+            raise MeetingAccessDeniedException(meeting_id, user_id)
+
+        created_invites = []
+        for invite in invites:
+            existing = await self.repo.get_invitation_by_email(meeting_id, invite.email)
+            if not existing:
+                new_invite = await self.repo.create_invitation(meeting_id, invite.model_dump())
+                created_invites.append(new_invite)
+
+                try:
+                    # Trigger emails for ad-hoc invitations added after meeting creation
+                    email_subject = f"Invitation Update: {meeting.title}"
+                    email_body = (
+                        f"Hello {new_invite.name},\n\n"
+                        f"You have been added to the meeting: {meeting.title}.\n\n"
+                        f"Link to join: {settings.FRONTEND_URL}/meetings/{meeting.id}\n"
+                    )
+
+                    send_meeting_invitation.delay(
+                        recipient=new_invite.email,
+                        subject=email_subject,
+                        body=email_body
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to send invitation email to {new_invite.email} for meeting {meeting.id}: {e}")
+
+        return created_invites

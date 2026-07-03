@@ -4,7 +4,7 @@ from typing import Optional, Sequence
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
-from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript
+from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation
 from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus
 from app.modules.meetings.constants import MEETING_URL_FORMAT
 
@@ -222,3 +222,33 @@ class MeetingRepository:
         stmt = select(Meeting.status).where(Meeting.id == meeting_id)
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def create_invitation(self, meeting_id: UUID, data: dict) -> MeetingInvitation:
+        invitation = MeetingInvitation(meeting_id=meeting_id, **data)
+        self.db.add(invitation)
+        await self.db.flush()
+        return invitation
+
+    async def get_invitation_by_email(self, meeting_id: UUID, email: str) -> Optional[MeetingInvitation]:
+        stmt = select(MeetingInvitation).where(
+            and_(
+                MeetingInvitation.meeting_id == meeting_id,
+                func.lower(MeetingInvitation.email) == email.strip().lower()
+            )
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def count_invitations(self, meeting_id: UUID) -> int:
+        stmt = select(func.count(MeetingInvitation.id)).where(MeetingInvitation.meeting_id == meeting_id)
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
+
+    async def get_user_by_id(self, user_id: UUID) -> Optional["User"]:
+        from app.models.user import User
+        stmt = select(User).where(User.id == user_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def list_invitations(self, meeting_id: UUID) -> Sequence[MeetingInvitation]:
+        stmt = select(MeetingInvitation).where(MeetingInvitation.meeting_id == meeting_id).order_by(MeetingInvitation.name.asc())
+        return (await self.db.execute(stmt)).scalars().all()
