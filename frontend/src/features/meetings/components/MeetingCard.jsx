@@ -6,6 +6,8 @@ import {
   MEETING_STATUS_LABELS,
   MEETING_STATUS_CLASSES,
   MEETING_STATUS_DOTS,
+  MEETING_TYPE_LABELS,
+  MEETING_TYPE_CLASSES,
 } from "../api/meetingTypes"
 import { useAuthContext } from "@/context/AuthContext"
 import { Play, Copy, ArrowRight, Trash } from "@phosphor-icons/react"
@@ -64,12 +66,21 @@ export function MeetingCard({ meeting }) {
               </CardDescription>
             )}
           </div>
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-none border px-2 py-0.5 text-[10px] font-medium shrink-0 ${statusClass}`}
-          >
-            <span className={`size-1.5 rounded-full ${statusDot}`} />
-            {statusLabel}
-          </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {meeting.meeting_type && (
+              <span
+                className={`inline-flex items-center rounded-none border px-2 py-0.5 text-[10px] font-medium ${MEETING_TYPE_CLASSES[meeting.meeting_type] || ""}`}
+              >
+                {MEETING_TYPE_LABELS[meeting.meeting_type] || meeting.meeting_type}
+              </span>
+            )}
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-none border px-2 py-0.5 text-[10px] font-medium ${statusClass}`}
+            >
+              <span className={`size-1.5 rounded-full ${statusDot}`} />
+              {statusLabel}
+            </span>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

@@ -11,7 +11,7 @@ from app.modules.meetings.schemas import (
     MeetingCreate, MeetingUpdate, MeetingResponse,
     MeetingParticipantResponse, MeetingJoinPayload,
     MeetingJoinInfoResponse, MeetingJoinResponse, RecordingResponse, TranscriptResponse,
-    WaitingCountResponse
+    WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse
 )
 from app.modules.meetings.enums import ParticipantStatus
 from app.modules.meetings.constants import WSEvent
@@ -416,3 +416,30 @@ async def request_screen_share_endpoint(
         }
     })
     return {"status": "requested"}
+
+@router.post("/scheduled", status_code=status.HTTP_201_CREATED, response_model=MeetingResponse)
+async def create_scheduled_meeting_endpoint(
+    payload: ScheduledMeetingCreate,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_meetings_service)
+):
+    ctrl = MeetingController(service)
+    return await ctrl.create_scheduled(current_user_id, payload)
+
+@router.post("/{meeting_id}/invitations", status_code=status.HTTP_200_OK, response_model=List[InvitationResponse])
+async def invite_participants_endpoint(
+    meeting_id: UUID,
+    payload: List[InvitationCreate],
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_meetings_service)
+):
+    ctrl = MeetingController(service)
+    return await ctrl.invite_participants(current_user_id, meeting_id, payload)
+
+@router.get("/{meeting_id}/invitations", status_code=status.HTTP_200_OK, response_model=List[InvitationResponse])
+async def list_invitations_endpoint(
+    meeting_id: UUID,
+    service = Depends(get_meetings_service)
+):
+    ctrl = MeetingController(service)
+    return await ctrl.list_invites(meeting_id)

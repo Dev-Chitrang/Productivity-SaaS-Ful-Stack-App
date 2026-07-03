@@ -22,6 +22,13 @@ import {
 import { eventSchema, EVENT_TYPE_OPTIONS, EVENT_COLOR_OPTIONS, RECURRENCE_FREQUENCY_OPTIONS } from "../schemas/eventSchema"
 import { EVENT_TYPE_LABELS, EVENT_COLOR_LABELS, RECURRENCE_LABELS, EVENT_COLOR_HEX } from "../api/calendarTypes"
 import { hhmmToAmpm, ampmToHHmm } from "../api/calendarMapper"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 const HOURS_12 = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
 const MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"]
@@ -47,12 +54,12 @@ function TimePicker({ value, onChange, label, id, hasError }) {
     }
 
     const selectClass = hasError
-        ? "h-8 w-14 border border-destructive bg-background px-1.5 text-xs outline-none focus-visible:border-destructive"
-        : "h-8 w-14 border border-input bg-background px-1.5 text-xs outline-none focus-visible:border-ring"
+        ? "h-8 w-14 border border-destructive bg-background text-foreground px-1.5 text-xs outline-none focus-visible:border-destructive"
+        : "h-8 w-14 border border-input bg-background text-foreground px-1.5 text-xs outline-none focus-visible:border-ring"
 
     const selectAmPmClass = hasError
-        ? "h-8 w-16 border border-destructive bg-background px-1.5 text-xs outline-none focus-visible:border-destructive"
-        : "h-8 w-16 border border-input bg-background px-1.5 text-xs outline-none focus-visible:border-ring"
+        ? "h-8 w-16 border border-destructive bg-background text-foreground px-1.5 text-xs outline-none focus-visible:border-destructive"
+        : "h-8 w-16 border border-input bg-background text-foreground px-1.5 text-xs outline-none focus-visible:border-ring"
 
     return (
         <div>
@@ -169,7 +176,7 @@ export function EventForm({ defaultValues, onSubmit, isPending = false, mode = "
                             <FormLabel>Type</FormLabel>
                             <FormControl>
                                 <select
-                                    className="h-8 w-full border border-input bg-background px-2 text-xs outline-none focus-visible:border-ring"
+                                    className="h-8 w-full border border-input bg-background text-foreground px-2 text-xs outline-none focus-visible:border-ring"
                                     {...field}
                                 >
                                     {EVENT_TYPE_OPTIONS.map((t) => (
@@ -304,16 +311,18 @@ export function EventForm({ defaultValues, onSubmit, isPending = false, mode = "
                 <FormField control={form.control} name="timezone" render={({ field }) => (
                     <FormItem>
                         <FormLabel>Timezone</FormLabel>
-                        <FormControl>
-                            <select
-                                className="h-8 w-full border border-input bg-background px-2 text-xs outline-none focus-visible:border-ring"
-                                {...field}
-                            >
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                            <FormControl>
+                                <SelectTrigger className="h-8 bg-background px-2">
+                                    <SelectValue placeholder="Select timezone" />
+                                </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
                                 {COMMON_TIMEZONES.map((tz) => (
-                                    <option key={tz} value={tz}>{tz}</option>
+                                    <SelectItem key={tz} value={tz}>{tz}</SelectItem>
                                 ))}
-                            </select>
-                        </FormControl>
+                            </SelectContent>
+                        </Select>
                         <FormMessage />
                     </FormItem>
                 )} />
@@ -356,7 +365,7 @@ export function EventForm({ defaultValues, onSubmit, isPending = false, mode = "
                                     <FormLabel>Frequency</FormLabel>
                                     <FormControl>
                                         <select
-                                            className="h-8 w-full border border-input bg-background px-2 text-xs outline-none focus-visible:border-ring"
+                                            className="h-8 w-full border border-input bg-background text-foreground px-2 text-xs outline-none focus-visible:border-ring"
                                             {...field}
                                         >
                                             {RECURRENCE_FREQUENCY_OPTIONS.map((f) => (

@@ -1,8 +1,8 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
-from pydantic import BaseModel, Field, field_validator
-from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus
+from pydantic import BaseModel, Field, field_validator, EmailStr, model_validator
+from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, MeetingType
 from app.modules.meetings.constants import MAX_MEETING_TITLE_LENGTH, MAX_GUEST_NAME_LENGTH, MAX_GUEST_EMAIL_LENGTH
 
 class MeetingBase(BaseModel):
@@ -41,6 +41,7 @@ class MeetingResponse(MeetingBase):
     meeting_link: str
     status: MeetingStatus
     active_screen_sharer_id: Optional[UUID] = None
+    invited_participants_count: int = 0
     created_at: datetime
     updated_at: datetime
     ended_at: Optional[datetime] = None
@@ -115,3 +116,47 @@ class TranscriptResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class InvitationCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    email: EmailStr
+
+class InvitationResponse(InvitationCreate):
+    id: UUID
+    meeting_id: UUID
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ScheduledMeetingCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    agenda: Optional[str] = None
+    scheduled_start: datetime
+    timezone: str = Field(..., min_length=1, max_length=50)
+    invitations: List[InvitationCreate] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_future_date(self):
+        if self.scheduled_start <= datetime.now(timezone.utc):
+            raise ValueError("Scheduled start time must be explicitly in the future.")
+        return self
+
+    @model_validator(mode="after")
+    def validate_invitations(self):
+        if not self.invitations:
+            raise ValueError("At least one participant is required.")
+        for i, invite in enumerate(self.invitations):
+            if not invite.name or not invite.name.strip():
+                raise ValueError(f"Participant {i + 1}: name is required.")
+            if not invite.email:
+                raise ValueError(f"Participant {i + 1}: email is required.")
+        return self
+
+class ScheduledMeetingUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    description: Optional[str] = None
+    agenda: Optional[str] = None
+    scheduled_start: Optional[datetime] = None
+    timezone: Optional[str] = None

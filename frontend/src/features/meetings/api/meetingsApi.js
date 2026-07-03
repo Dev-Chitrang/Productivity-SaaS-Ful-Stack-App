@@ -5,6 +5,7 @@ export const meetingsApi = {
   get: (id) => api.get(`/meetings/${id}`),
   getByCode: (code) => api.get(`/meetings/by-code/${encodeURIComponent(code)}`),
   create: (data) => api.post("/meetings", data),
+  createScheduled: (data) => api.post("/meetings/scheduled", data),
   update: (id, data) => api.patch(`/meetings/${id}`, data),
   delete: (id) => api.delete(`/meetings/${id}`),
   end: (id) => api.post(`/meetings/${id}/end`),

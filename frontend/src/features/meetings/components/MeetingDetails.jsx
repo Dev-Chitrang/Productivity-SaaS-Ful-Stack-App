@@ -5,6 +5,8 @@ import {
   MEETING_STATUS_LABELS,
   MEETING_STATUS_CLASSES,
   MEETING_STATUS_DOTS,
+  MEETING_TYPE_LABELS,
+  MEETING_TYPE_CLASSES,
 } from "../api/meetingTypes"
 import { ParticipantList } from "./ParticipantList"
 import {
@@ -72,12 +74,21 @@ export function MeetingDetails({
                 </p>
               )}
             </div>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-none border px-2 py-0.5 text-[10px] font-medium shrink-0 ${statusClass}`}
-            >
-              <span className={`size-1.5 rounded-full ${statusDot}`} />
-              {statusLabel}
-            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {meeting?.meeting_type && (
+                <span
+                  className={`inline-flex items-center rounded-none border px-2 py-0.5 text-[10px] font-medium ${MEETING_TYPE_CLASSES[meeting.meeting_type] || ""}`}
+                >
+                  {MEETING_TYPE_LABELS[meeting.meeting_type] || meeting.meeting_type}
+                </span>
+              )}
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-none border px-2 py-0.5 text-[10px] font-medium shrink-0 ${statusClass}`}
+              >
+                <span className={`size-1.5 rounded-full ${statusDot}`} />
+                {statusLabel}
+              </span>
+            </div>
           </div>
         </CardHeader>
 
@@ -92,6 +103,61 @@ export function MeetingDetails({
               <p className="mt-0.5">{createdDate}</p>
             </div>
           </div>
+
+          {meeting?.meeting_type === "SCHEDULED" && (
+            <div className="rounded border border-border bg-muted/30 p-3 space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Scheduled Meeting
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                {meeting.scheduled_date && meeting.scheduled_time && (
+                  <div>
+                    <span className="text-muted-foreground">Scheduled Time</span>
+                    <p className="mt-0.5 font-medium">
+                      {new Date(`${meeting.scheduled_date}T${meeting.scheduled_time}`).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                )}
+                {meeting.duration && (
+                  <div>
+                    <span className="text-muted-foreground">Duration</span>
+                    <p className="mt-0.5 font-medium">{meeting.duration} min</p>
+                  </div>
+                )}
+                {meeting.timezone && (
+                  <div>
+                    <span className="text-muted-foreground">Timezone</span>
+                    <p className="mt-0.5 font-medium">{meeting.timezone}</p>
+                  </div>
+                )}
+                {meeting.agenda && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Agenda</span>
+                    <p className="mt-0.5 whitespace-pre-wrap">{meeting.agenda}</p>
+                  </div>
+                )}
+                {meeting.invited_participants_count != null && meeting.invited_participants_count > 0 && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Invited Participants</span>
+                    <p className="mt-0.5 font-medium">{meeting.invited_participants_count}</p>
+                  </div>
+                )}
+                {meeting.enable_ai_analysis && (
+                  <div className="col-span-2">
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      AI Analysis enabled
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -166,9 +232,20 @@ export function MeetingDetails({
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">
-            Participants ({(participants || []).filter((p) => p.status === "WAITING" || p.status === "ADMITTED").length || 0})
-          </CardTitle>
+          <div className="flex items-center gap-6">
+            <div>
+              <CardTitle className="text-sm">Participants</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {(participants || []).filter((p) => p.status === "WAITING" || p.status === "ADMITTED").length || 0}
+              </p>
+            </div>
+            <div>
+              <CardTitle className="text-sm">Invited Participants</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {meeting?.invited_participants_count ?? 0}
+              </p>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <ParticipantList

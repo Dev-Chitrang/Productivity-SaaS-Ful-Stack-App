@@ -8,7 +8,7 @@ from app.modules.meetings.schemas import (
     MeetingCreate, MeetingUpdate, MeetingResponse,
     MeetingParticipantResponse, MeetingJoinPayload,
     MeetingJoinInfoResponse, MeetingJoinResponse, TranscriptResponse, RecordingResponse,
-    WaitingCountResponse
+    WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse
 )
 from app.modules.meetings.exceptions import (
     MeetingNotFoundException, MeetingAccessDeniedException, MeetingValidationError
@@ -172,6 +172,18 @@ class MeetingController:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
         except MeetingAccessDeniedException as e:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+    async def create_scheduled(self, host_id: UUID, payload: ScheduledMeetingCreate) -> dict:
+        meeting = await self.service.create_scheduled_meeting(host_id, payload)
+        return MeetingResponse.model_validate(meeting)
+
+    async def invite_participants(self, user_id: UUID, meeting_id: UUID, invites: List[InvitationCreate]) -> List[dict]:
+        invitations = await self.service.add_invitations(user_id, meeting_id, invites)
+        return [InvitationResponse.model_validate(i) for i in invitations]
+
+    async def list_invites(self, meeting_id: UUID) -> List[dict]:
+        invitations = await self.service.repo.list_invitations(meeting_id)
+        return [InvitationResponse.model_validate(i) for i in invitations]
 
     async def delete_recording(self, rec_id: UUID) -> dict:
         await self.service.remove_recording(rec_id)

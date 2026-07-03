@@ -36,6 +36,8 @@ class Settings(BaseSettings):
     # Google OAuth Configuration
     GOOGLE_CLIENT_ID: str
 
+    FRONTEND_URL: str
+
     STORAGE_BASE_DIR: str
 
     @property

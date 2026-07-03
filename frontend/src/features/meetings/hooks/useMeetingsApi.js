@@ -63,6 +63,17 @@ export function useCreateMeeting() {
   })
 }
 
+export function useCreateScheduledMeeting() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (payload) => meetingsApi.createScheduled(payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: meetingKeys.lists() })
+      toast.success("Scheduled meeting created. Invitations sent.")
+    },
+  })
+}
+
 export function useUpdateMeeting() {
   const qc = useQueryClient()
   return useMutation({

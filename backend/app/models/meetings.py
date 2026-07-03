@@ -5,7 +5,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import relationship
 from uuid6 import uuid7
 from app.core.database import Base
-from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus
+from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, MeetingType
 
 class Meeting(Base):
     __tablename__ = "meetings"
@@ -34,6 +34,23 @@ class Meeting(Base):
 
     # Core relationship linkage mapping to local telemetry sub-tables
     participants = relationship("MeetingParticipant", back_populates="meeting", cascade="all, delete-orphan")
+
+    meeting_type = Column(SQLEnum(MeetingType, name="meeting_type_enum"), nullable=False, default=MeetingType.INSTANT)
+    scheduled_start = Column(DateTime(timezone=True), nullable=True)
+    timezone = Column(String(50), nullable=True)
+    agenda = Column(String, nullable=True)
+    scheduled_by = Column(PG_UUID(as_uuid=True), nullable=True)
+
+class MeetingInvitation(Base):
+    __tablename__ = "meeting_invitations"
+
+    id = Column(PG_UUID(as_uuid=True), primary_key=True, index=True, default=uuid7)
+    meeting_id = Column(PG_UUID(as_uuid=True), ForeignKey("meetings.id", ondelete="CASCADE"), index=True, nullable=False)
+
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), index=True, nullable=False)
+
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
 class MeetingParticipant(Base):
