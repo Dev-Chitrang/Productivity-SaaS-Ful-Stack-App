@@ -1,0 +1,19 @@
+Reminder Preferences Configured
+
+Hello {{ user_name }},
+
+Your reminder preferences have been configured successfully.
+
+Configured reminders:
+{% for module in modules %}
+- {{ module.name }}
+{% if module.frequency %}  Frequency: {{ module.frequency }}{% endif %}
+{% if module.time %}  Time: {{ module.time }}{% endif %}
+{% if module.timezone %}  Timezone: {{ module.timezone }}{% endif %}
+{% endfor %}
+
+Configured at:
+{{ configured_at }}
+
+---
+&copy; {{ year }} SaaS Productivity Suite
