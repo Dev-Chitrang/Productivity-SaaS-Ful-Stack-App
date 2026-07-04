@@ -17,3 +17,4 @@ google-auth
 requests
 aiofiles
 python-multipart
+jinja2

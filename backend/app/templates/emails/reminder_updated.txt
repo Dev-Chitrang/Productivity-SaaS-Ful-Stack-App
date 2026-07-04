@@ -1,0 +1,42 @@
+Reminder Preferences Updated
+
+Hello {{ user_name }},
+
+Your reminder preferences have been updated.
+
+{% if modified_modules %}
+{% for module in modified_modules %}
+{{ module.name }}
+
+Previous
+{{ module.previous }}
+
+Updated
+{{ module.updated }}
+
+{% endfor %}
+{% endif %}
+
+{% if disabled_modules %}
+The following reminders have been disabled:
+{% for module in disabled_modules %}
+- {{ module }}
+{% endfor %}
+
+{% endif %}
+
+{% if enabled_modules %}
+The following reminders have been enabled:
+{% for module in enabled_modules %}
+- {{ module.name }}
+{% if module.frequency %}  Frequency: {{ module.frequency }}{% endif %}
+{% if module.time %}  Time: {{ module.time }}{% endif %}
+{% if module.timezone %}  Timezone: {{ module.timezone }}{% endif %}
+{% endfor %}
+
+{% endif %}
+Updated at:
+{{ updated_at }}
+
+---
+&copy; {{ year }} SaaS Productivity Suite

@@ -15,7 +15,7 @@ from app.modules.meetings.exceptions import (
 )
 from app.core.config import settings
 from app.core.logger import logger
-from app.workers.tasks import send_meeting_invitation
+from app.workers.tasks import send_async_email
 
 class MeetingService:
     def __init__(self, repo: MeetingRepository, storage: StorageService):
@@ -471,7 +471,7 @@ class MeetingService:
 
         if host_email:
             try:
-                send_meeting_invitation.delay(
+                send_async_email.delay(
                     recipient=host_email,
                     subject=host_subject,
                     body=host_body
@@ -497,7 +497,7 @@ class MeetingService:
             )
 
             try:
-                send_meeting_invitation.delay(
+                send_async_email.delay(
                     recipient=db_invite.email,
                     subject=participant_subject,
                     body=participant_body
@@ -529,7 +529,7 @@ class MeetingService:
                         f"Link to join: {settings.FRONTEND_URL}/meetings/{meeting.id}\n"
                     )
 
-                    send_meeting_invitation.delay(
+                    send_async_email.delay(
                         recipient=new_invite.email,
                         subject=email_subject,
                         body=email_body

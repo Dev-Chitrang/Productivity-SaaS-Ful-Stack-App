@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reminder Preferences Updated</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;margin:24px auto;background-color:#ffffff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <tr>
+      <td style="padding:32px 32px 16px 32px;border-bottom:1px solid #e5e7eb;">
+        <h1 style="margin:0;font-size:22px;color:#1f2937;">Reminder Preferences Updated</h1>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:24px 32px;color:#374151;line-height:1.6;">
+        <p style="margin:0 0 16px 0;">Hello {{ user_name }},</p>
+        <p style="margin:0 0 20px 0;">Your reminder preferences have been updated.</p>
+
+        {% if modified_modules %}
+        {% for module in modified_modules %}
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:16px;background-color:#f9fafb;border-radius:6px;">
+          <tr>
+            <td style="padding:12px 16px;">
+              <strong style="color:#111827;font-size:15px;">{{ module.name }}</strong>
+              <div style="margin-top:8px;">
+                <div style="margin-bottom:8px;">
+                  <span style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Previous</span>
+                  <p style="margin:4px 0 0 0;color:#9ca3af;">{{ module.previous }}</p>
+                </div>
+                <div>
+                  <span style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;">Updated</span>
+                  <p style="margin:4px 0 0 0;color:#111827;font-weight:600;">{{ module.updated }}</p>
+                </div>
+              </div>
+            </td>
+          </tr>
+        </table>
+        {% endfor %}
+        {% endif %}
+
+        {% if disabled_modules %}
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:16px;background-color:#fef2f2;border-radius:6px;">
+          <tr>
+            <td style="padding:12px 16px;">
+              <strong style="color:#991b1b;font-size:15px;">The following reminders have been disabled:</strong>
+              <ul style="margin:8px 0 0 0;padding-left:20px;color:#991b1b;">
+                {% for module in disabled_modules %}
+                <li style="margin-bottom:4px;">{{ module }}</li>
+                {% endfor %}
+              </ul>
+            </td>
+          </tr>
+        </table>
+        {% endif %}
+
+        {% if enabled_modules %}
+        <h2 style="font-size:16px;color:#1f2937;margin:24px 0 12px 0;">The following reminders have been enabled:</h2>
+        {% for module in enabled_modules %}
+        <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;margin-bottom:12px;background-color:#f0fdf4;border-radius:6px;">
+          <tr>
+            <td style="padding:12px 16px;">
+              <strong style="color:#166534;font-size:15px;">{{ module.name }}</strong>
+              <ul style="margin:8px 0 0 0;padding-left:20px;color:#4b5563;">
+                {% if module.frequency %}<li style="margin-bottom:4px;">Frequency: {{ module.frequency }}</li>{% endif %}
+                {% if module.time %}<li style="margin-bottom:4px;">Time: {{ module.time }}</li>{% endif %}
+                {% if module.timezone %}<li style="margin-bottom:4px;">Timezone: {{ module.timezone }}</li>{% endif %}
+              </ul>
+            </td>
+          </tr>
+        </table>
+        {% endfor %}
+        {% endif %}
+
+        <p style="margin:24px 0 0 0;font-size:13px;color:#9ca3af;">
+          Updated at:<br>
+          <strong style="color:#6b7280;">{{ updated_at }}</strong>
+        </p>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:16px 32px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;text-align:center;">
+        &copy; {{ year }} SaaS Productivity Suite. All rights reserved.
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -19,6 +19,7 @@ from app.modules.tasks.routes import router as tasks_router
 from app.modules.meetings.routes import router as meetings_router
 from app.modules.meetings.websocket import router as meetings_ws_router
 from app.modules.whiteboard.routes import router as whiteboards_router
+from app.modules.reminders.routes import router as reminders_router
 
 
 @asynccontextmanager
@@ -59,6 +60,7 @@ app.include_router(tasks_router, prefix=settings.API_V1_STR)
 app.include_router(meetings_router, prefix=settings.API_V1_STR)
 app.include_router(meetings_ws_router)
 app.include_router(whiteboards_router, prefix=settings.API_V1_STR)
+app.include_router(reminders_router, prefix=settings.API_V1_STR)
 
 @app.get("/health", tags=["System Health"])
 async def health_check(db: AsyncSession = Depends(get_db)):

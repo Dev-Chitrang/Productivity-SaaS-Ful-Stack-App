@@ -14,12 +14,14 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import { Separator } from "@/components/ui/separator"
 import { useAuthContext } from "@/context/AuthContext"
 import {
   useChangeEmail,
   useChangePassword,
   useToggle2FA,
 } from "@/hooks/useUserApi"
+import ReminderSettings from "@/features/settings/components/ReminderSettings"
 
 const emailSchema = z.object({
   current_password: z.string().min(1, "Password is required"),
@@ -186,6 +188,10 @@ function SettingsPage() {
                   : "Enable 2FA"}
             </Button>
           </section>
+
+          <Separator />
+
+          <ReminderSettings />
         </div>
       </main>
   )
