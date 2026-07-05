@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 from typing import Optional, Sequence
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
-from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation
-from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus
+from sqlalchemy import select, and_, func, update
+from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation, MeetingAIAnalysis
+from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, AIAnalysisStatus
 from app.modules.meetings.constants import MEETING_URL_FORMAT
 
 class MeetingRepository:
@@ -252,3 +252,41 @@ class MeetingRepository:
     async def list_invitations(self, meeting_id: UUID) -> Sequence[MeetingInvitation]:
         stmt = select(MeetingInvitation).where(MeetingInvitation.meeting_id == meeting_id).order_by(MeetingInvitation.name.asc())
         return (await self.db.execute(stmt)).scalars().all()
+
+class MeetingAIAnalysisRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def create_analysis_placeholder(self, meeting_id: UUID) -> MeetingAIAnalysis:
+        """Initializes a tracking row in a PENDING state before offloading to Celery."""
+        analysis = MeetingAIAnalysis(
+            meeting_id=meeting_id,
+            status=AIAnalysisStatus.PENDING
+        )
+        self.db.add(analysis)
+        await self.db.flush()
+        return analysis
+
+    async def get_by_meeting_id(self, meeting_id: UUID) -> Optional[MeetingAIAnalysis]:
+        """Fetches the latest analysis entry associated with the target session."""
+        stmt = (
+            select(MeetingAIAnalysis)
+            .where(MeetingAIAnalysis.meeting_id == meeting_id)
+            .order_by(MeetingAIAnalysis.created_at.desc())
+            .limit(1)
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def update_status(self, analysis_id: UUID, status: AIAnalysisStatus, **kwargs) -> None:
+        """Helper to cleanly mutate execution status boundaries and track timestamps."""
+        payload = {"status": status, "updated_at": datetime.now(timezone.utc)}
+        if status == AIAnalysisStatus.PROCESSING:
+            payload["processing_started_at"] = datetime.now(timezone.utc)
+        elif status in [AIAnalysisStatus.COMPLETED, AIAnalysisStatus.FAILED]:
+            payload["processing_completed_at"] = datetime.now(timezone.utc)
+
+        payload.update(kwargs)
+
+        stmt = update(MeetingAIAnalysis).where(MeetingAIAnalysis.id == analysis_id).values(**payload)
+        await self.db.execute(stmt)
+        await self.db.flush()

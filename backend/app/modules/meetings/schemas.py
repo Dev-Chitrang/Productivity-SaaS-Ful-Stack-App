@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, EmailStr, model_validator
-from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, MeetingType
+from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, MeetingType, AIAnalysisStatus
 from app.modules.meetings.constants import MAX_MEETING_TITLE_LENGTH, MAX_GUEST_NAME_LENGTH, MAX_GUEST_EMAIL_LENGTH
 
 class MeetingBase(BaseModel):
@@ -10,6 +10,8 @@ class MeetingBase(BaseModel):
     description: Optional[str] = None
     enable_recording: bool = False
     enable_transcript: bool = False
+    agenda: Optional[str] = None
+    enable_ai_analysis: bool = False
 
     @field_validator("title")
     @classmethod
@@ -26,6 +28,8 @@ class MeetingUpdate(BaseModel):
     description: Optional[str] = None
     enable_recording: Optional[bool] = None
     enable_transcript: Optional[bool] = None
+    agenda: Optional[str] = None
+    enable_ai_analysis: Optional[bool] = None
 
     @field_validator("title")
     @classmethod
@@ -132,6 +136,9 @@ class InvitationResponse(InvitationCreate):
 class ScheduledMeetingCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
+    enable_recording: bool = False
+    enable_transcript: bool = False
+    enable_ai_analysis: bool = False
     agenda: Optional[str] = None
     scheduled_start: datetime
     timezone: str = Field(..., min_length=1, max_length=50)
@@ -157,6 +164,46 @@ class ScheduledMeetingCreate(BaseModel):
 class ScheduledMeetingUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    enable_recording: Optional[bool] = None
+    enable_transcript: Optional[bool] = None
+    enable_ai_analysis: Optional[bool] = None
     agenda: Optional[str] = None
     scheduled_start: Optional[datetime] = None
     timezone: Optional[str] = None
+
+class SuggestedTaskSchema(BaseModel):
+    title: str
+    description: str
+    priority: str
+
+class AIAnalysisPayloadSchema(BaseModel):
+    """Matches the exact structural format required from the LLM engine generation output."""
+    summary: str
+    coverage_percentage: int = Field(..., ge=0, le=100)
+    covered_points: List[str]
+    out_of_agenda_points: List[str]
+    suggested_tasks: List[SuggestedTaskSchema]
+
+class AIAnalysisResponse(BaseModel):
+    id: UUID
+    meeting_id: UUID
+    provider: str
+    model: str
+    status: AIAnalysisStatus
+    summary: Optional[str] = None
+    agenda_coverage_percentage: Optional[int] = None
+    covered_points: Optional[List[str]] = None
+    out_of_agenda_points: Optional[List[str]] = None
+    suggested_tasks: Optional[List[SuggestedTaskSchema]] = None
+    processing_started_at: Optional[datetime] = None
+    processing_completed_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class AIAnalysisStatusResponse(BaseModel):
+    meeting_id: UUID
+    status: AIAnalysisStatus
+    processing_started_at: Optional[datetime] = None
+    processing_completed_at: Optional[datetime] = None

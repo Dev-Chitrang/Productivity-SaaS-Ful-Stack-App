@@ -16,7 +16,7 @@ from app.modules.users.routes import router as users_router
 from app.modules.calender.routes import router as calender_router
 from app.modules.notes.routes import router as notes_router
 from app.modules.tasks.routes import router as tasks_router
-from app.modules.meetings.routes import router as meetings_router
+from app.modules.meetings.routes import router as meetings_router, meeting_analysis_router
 from app.modules.meetings.websocket import router as meetings_ws_router
 from app.modules.whiteboard.routes import router as whiteboards_router
 from app.modules.reminders.routes import router as reminders_router
@@ -58,6 +58,7 @@ app.include_router(calender_router, prefix=settings.API_V1_STR)
 app.include_router(notes_router, prefix=settings.API_V1_STR)
 app.include_router(tasks_router, prefix=settings.API_V1_STR)
 app.include_router(meetings_router, prefix=settings.API_V1_STR)
+app.include_router(meeting_analysis_router, prefix=settings.API_V1_STR)
 app.include_router(meetings_ws_router)
 app.include_router(whiteboards_router, prefix=settings.API_V1_STR)
 app.include_router(reminders_router, prefix=settings.API_V1_STR)

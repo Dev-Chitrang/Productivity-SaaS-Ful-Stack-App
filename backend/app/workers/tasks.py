@@ -1,6 +1,7 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 from celery import Celery
 from app.core.config import settings
 
@@ -43,14 +44,26 @@ def send_async_email(recipient: str, subject: str, body: str):
     retry_backoff=True,
     max_retries=3
 )
-def send_html_email(recipient: str, subject: str, html_body: str, text_body: str | None = None):
-    msg = MIMEMultipart("alternative")
+def send_html_email(recipient: str, subject: str, html_body: str, text_body: str | None = None, attachments: list | None = None):
+    body = MIMEMultipart("alternative")
+    body.attach(MIMEText(text_body or html_body, "plain"))
+    body.attach(MIMEText(html_body, "html"))
+
+    if attachments:
+        msg = MIMEMultipart("mixed")
+        msg.attach(body)
+        for att in attachments:
+            content_type = att.get("content_type", "application/octet-stream")
+            subtype = content_type.split("/")[-1] if "/" in content_type else "octet-stream"
+            part = MIMEApplication(att["content"], _subtype=subtype)
+            part.add_header("Content-Disposition", "attachment", filename=att["filename"])
+            msg.attach(part)
+    else:
+        msg = body
+
     msg["Subject"] = subject
     msg["From"] = settings.SMTP_FROM_EMAIL
     msg["To"] = recipient
-
-    msg.attach(MIMEText(text_body or html_body, "plain"))
-    msg.attach(MIMEText(html_body, "html"))
 
     with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
         if settings.SMTP_USE_TLS:
@@ -137,3 +150,96 @@ async def _run_all_reminder_scans():
                         f"Status: {status_lbl}"
                     )
                     send_async_email.delay(user.email, subject, body)
+
+@celery_app.task(
+    name="tasks.analyze_meeting_transcript",
+    autoretry_for=(Exception,),
+    retry_backoff=True,
+    max_retries=3
+)
+def analyze_meeting_transcript(meeting_id_str: str):
+    """Orchestrates AI analysis and completion email for a meeting.
+
+    Only receives meeting_id; all other data is loaded from the database.
+    """
+    import asyncio
+    from uuid import UUID
+    from app.core.database import async_session_factory
+    from app.core.logger import logger
+    from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysisRepository
+    from app.modules.meetings.ai_provider_service import AIProviderService
+    from app.modules.meetings.service import MeetingAIAnalysisService
+    from app.modules.meetings.completion_service import MeetingCompletionService
+    from app.modules.meetings.enums import AIAnalysisStatus
+
+    meeting_id = UUID(meeting_id_str)
+
+    async def _run():
+        async with async_session_factory() as session:
+            meeting_repo = MeetingRepository(session)
+            ai_repo = MeetingAIAnalysisRepository(session)
+
+            meeting = await meeting_repo.get_by_id(meeting_id)
+            if not meeting:
+                logger.error(f"Meeting {meeting_id} not found for completion pipeline")
+                return
+
+            logger.info(f"Meeting {meeting_id} found for completion pipeline")
+
+            transcripts = await meeting_repo.list_transcripts_by_meeting(meeting_id)
+            logger.info(f"Transcript lookup for meeting {meeting_id}: {len(transcripts)} transcript(s) found")
+
+            analysis_attempted = False
+
+            if not transcripts:
+                logger.warning(f"No transcripts found for meeting {meeting_id}, will retry")
+                raise Exception(f"Transcript not yet available for meeting {meeting_id}")
+
+            transcript_text = ""
+            tx_path = transcripts[0].storage_path
+            try:
+                def read_file():
+                    with open(tx_path, 'r', encoding='utf-8') as f:
+                        return f.read()
+                transcript_text = await asyncio.to_thread(read_file)
+                logger.info(f"Transcript file loaded: {tx_path} ({len(transcript_text)} chars)")
+            except Exception as e:
+                logger.error(f"Failed to read transcript file {tx_path}: {e}")
+                raise
+
+            if not transcript_text:
+                logger.error(f"Transcript file {tx_path} is empty for meeting {meeting_id}, marking analysis as FAILED")
+                analysis_placeholder = await ai_repo.get_by_meeting_id(meeting_id)
+                if not analysis_placeholder:
+                    analysis_placeholder = await ai_repo.create_analysis_placeholder(meeting_id)
+                await ai_repo.update_status(
+                    analysis_placeholder.id,
+                    AIAnalysisStatus.FAILED,
+                    raw_response={"error": "Transcript file is empty"},
+                )
+            else:
+                from app.modules.meetings.transcript_preprocessor import preprocess_transcript
+                cleaned_transcript = preprocess_transcript(transcript_text)
+
+                logger.info(f"Starting AI analysis request for meeting {meeting_id}")
+
+                provider = AIProviderService()
+                ai_service = MeetingAIAnalysisService(ai_repo, provider)
+                await ai_service.process_async_transcript_analysis(
+                    meeting_id=meeting_id,
+                    agenda=meeting.agenda or "",
+                    transcript_text=cleaned_transcript,
+                )
+
+                analysis_attempted = True
+                logger.info(f"AI analysis completed for meeting {meeting_id}")
+
+            logger.info(f"Starting completion email dispatch for meeting {meeting_id}")
+            completion_service = MeetingCompletionService(session)
+            await completion_service.send_completion_email(meeting_id)
+            logger.info(f"Completion email dispatch completed for meeting {meeting_id}")
+
+            await session.commit()
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(_run())

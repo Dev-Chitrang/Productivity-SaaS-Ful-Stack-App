@@ -150,7 +150,7 @@ export function CreateMeetingDialog({ open, onOpenChange }) {
   const onSubmit = async (values) => {
     try {
       if (values.meeting_type === "INSTANT") {
-        const payload = { title: values.title, description: values.description, enable_recording: values.enable_recording, enable_transcript: values.enable_transcript }
+        const payload = { title: values.title, description: values.description, enable_recording: values.enable_recording, enable_transcript: values.enable_transcript, enable_ai_analysis: values.enable_ai_analysis, agenda: values.agenda || null }
         await createMeeting.mutateAsync(payload)
       } else {
         const scheduledStart = dayjs.tz(
@@ -161,6 +161,9 @@ export function CreateMeetingDialog({ open, onOpenChange }) {
         const payload = {
           title: values.title,
           description: values.description || null,
+          enable_recording: values.enable_recording,
+          enable_transcript: values.enable_transcript,
+          enable_ai_analysis: values.enable_ai_analysis,
           agenda: values.agenda || null,
           scheduled_start: scheduledStart,
           timezone: values.timezone,
@@ -274,6 +277,54 @@ export function CreateMeetingDialog({ open, onOpenChange }) {
               )}
             />
 
+            {/* Agenda — shown for both meeting types when AI is available */}
+            <FormField
+              control={form.control}
+              name="agenda"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    <span className="inline-flex items-center gap-1">
+                      <Note className="size-3" />
+                      Agenda{aiAnalysis ? " *" : " (optional)"}
+                    </span>
+                  </FormLabel>
+                  <FormControl>
+                    <textarea
+                      aria-label="Meeting agenda"
+                      rows={3}
+                      placeholder={aiAnalysis ? "Agenda is required for AI analysis..." : "Topics to cover..."}
+                      className="flex w-full rounded border border-border bg-transparent px-3 py-2 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* AI Analysis toggle — shown for both meeting types */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={aiAnalysis}
+                onChange={(e) => {
+                  const enabled = e.target.checked
+                  setAiAnalysis(enabled)
+                  form.setValue("enable_ai_analysis", enabled)
+                  if (enabled) {
+                    setTranscript(true)
+                    form.setValue("enable_transcript", true)
+                  }
+                }}
+                className="size-3.5 accent-primary"
+              />
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <Robot className="size-3" />
+                Enable AI Analysis
+              </span>
+            </label>
+
             {meetingType === "SCHEDULED" && (
               <div className="space-y-4 rounded border border-border p-3">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -375,47 +426,6 @@ export function CreateMeetingDialog({ open, onOpenChange }) {
                     )}
                   />
                 </div>
-
-                <FormField
-                  control={form.control}
-                  name="agenda"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>
-                        <span className="inline-flex items-center gap-1">
-                          <Note className="size-3" />
-                          Agenda (optional)
-                        </span>
-                      </FormLabel>
-                      <FormControl>
-                        <textarea
-                          aria-label="Meeting agenda"
-                          rows={3}
-                          placeholder="Topics to cover..."
-                          className="flex w-full rounded border border-border bg-transparent px-3 py-2 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={aiAnalysis}
-                    onChange={(e) => {
-                      setAiAnalysis(e.target.checked)
-                      form.setValue("enable_ai_analysis", e.target.checked)
-                    }}
-                    className="size-3.5 accent-primary"
-                  />
-                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                    <Robot className="size-3" />
-                    Enable AI Analysis
-                  </span>
-                </label>
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
@@ -519,17 +529,18 @@ export function CreateMeetingDialog({ open, onOpenChange }) {
                     Enable Recording
                   </span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className={`flex items-center gap-2 ${aiAnalysis ? "" : "cursor-pointer"}`}>
                   <input
                     type="checkbox"
                     checked={transcript}
+                    disabled={aiAnalysis}
                     onChange={(e) => {
                       setTranscript(e.target.checked)
                       form.setValue("enable_transcript", e.target.checked)
                     }}
                     className="size-3.5 accent-primary"
                   />
-                  <span className="text-xs text-muted-foreground">
+                  <span className={`text-xs ${aiAnalysis ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
                     Enable Transcript
                   </span>
                 </label>

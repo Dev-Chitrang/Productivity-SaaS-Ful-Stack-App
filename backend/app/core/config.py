@@ -40,6 +40,9 @@ class Settings(BaseSettings):
 
     STORAGE_BASE_DIR: str
 
+    NVIDIA_NIM_API_KEY: str
+    NVIDIA_NIM_TIMEOUT: int = 300
+
     @property
     def async_database_url(self) -> str:
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

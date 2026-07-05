@@ -13,6 +13,7 @@ import {
   useDeleteTranscript,
 } from "../hooks/useMeetingsApi"
 import { MeetingDetails } from "../components/MeetingDetails"
+import { AIAnalysisPanel } from "../components/AIAnalysisPanel"
 import { EditMeetingDialog } from "../components/EditMeetingDialog"
 import { JoinMeetingDialog } from "../components/JoinMeetingDialog"
 import { MeetingDetailSkeleton } from "../components/LoadingSkeleton"
@@ -383,6 +384,9 @@ function MeetingDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* AI Analysis Section */}
+      <AIAnalysisPanel meetingId={id} enabled={meeting?.enable_ai_analysis} />
 
       <EditMeetingDialog
         meeting={meeting}
