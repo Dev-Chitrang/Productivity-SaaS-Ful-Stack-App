@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional, List
 from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, EmailStr, model_validator
-from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, MeetingType, AIAnalysisStatus
+from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, MeetingType, AIAnalysisStatus, SessionStatus
 from app.modules.meetings.constants import MAX_MEETING_TITLE_LENGTH, MAX_GUEST_NAME_LENGTH, MAX_GUEST_EMAIL_LENGTH
 
 class MeetingBase(BaseModel):
@@ -56,7 +56,7 @@ class MeetingResponse(MeetingBase):
 
 class MeetingParticipantResponse(BaseModel):
     id: UUID
-    meeting_id: UUID
+    session_id: UUID
     user_id: Optional[UUID] = None
     user_name: Optional[str] = None
     guest_name: Optional[str] = None
@@ -73,7 +73,7 @@ class MeetingParticipantResponse(BaseModel):
 
 class MeetingJoinResponse(BaseModel):
     id: UUID
-    meeting_id: UUID
+    session_id: UUID
     user_id: Optional[UUID] = None
     guest_name: Optional[str] = None
     guest_email: Optional[str] = None
@@ -97,7 +97,7 @@ class MeetingJoinPayload(BaseModel):
 
 class RecordingResponse(BaseModel):
     id: UUID
-    meeting_id: UUID
+    session_id: UUID
     filename: str
     content_type: str
     size: int
@@ -112,7 +112,7 @@ class WaitingCountResponse(BaseModel):
 
 class TranscriptResponse(BaseModel):
     id: UUID
-    meeting_id: UUID
+    session_id: UUID
     filename: str
     content_type: str
     size: int
@@ -186,7 +186,7 @@ class AIAnalysisPayloadSchema(BaseModel):
 
 class AIAnalysisResponse(BaseModel):
     id: UUID
-    meeting_id: UUID
+    session_id: UUID
     provider: str
     model: str
     status: AIAnalysisStatus
@@ -203,7 +203,62 @@ class AIAnalysisResponse(BaseModel):
         from_attributes = True
 
 class AIAnalysisStatusResponse(BaseModel):
-    meeting_id: UUID
+    session_id: UUID
     status: AIAnalysisStatus
     processing_started_at: Optional[datetime] = None
     processing_completed_at: Optional[datetime] = None
+
+
+# ---------------------------------------------------------------------------
+# Session History schemas (Phase 5)
+# ---------------------------------------------------------------------------
+
+
+class SessionHistoryItemResponse(BaseModel):
+    """Lightweight row returned in the session list (host or participant view)."""
+    id: UUID
+    meeting_id: UUID
+    status: SessionStatus
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    duration_seconds: Optional[int] = None
+    participant_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class SessionParticipantSummary(BaseModel):
+    id: UUID
+    user_id: Optional[UUID] = None
+    user_name: Optional[str] = None
+    guest_name: Optional[str] = None
+    participant_type: ParticipantType
+    status: ParticipantStatus
+    joined_at: datetime
+    left_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class SessionArtifactFlags(BaseModel):
+    has_recording: bool = False
+    has_transcript: bool = False
+    has_ai_analysis: bool = False
+
+
+class SessionDetailResponse(BaseModel):
+    """Full session detail including participants and artifact availability flags."""
+    id: UUID
+    meeting_id: UUID
+    host_id: UUID
+    status: SessionStatus
+    started_at: datetime
+    ended_at: Optional[datetime] = None
+    duration_seconds: Optional[int] = None
+    participants: List[SessionParticipantSummary] = []
+    artifacts: SessionArtifactFlags = SessionArtifactFlags()
+
+    class Config:
+        from_attributes = True

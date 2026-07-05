@@ -4,8 +4,8 @@ from typing import Optional, Sequence
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, update
-from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation, MeetingAIAnalysis
-from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, AIAnalysisStatus
+from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation, MeetingAIAnalysis, MeetingSession
+from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, SessionStatus, AIAnalysisStatus
 from app.modules.meetings.constants import MEETING_URL_FORMAT
 
 class MeetingRepository:
@@ -13,7 +13,6 @@ class MeetingRepository:
         self.db = db
 
     def generate_meeting_code(self) -> str:
-        """Generates a secure, distinct 10-character meeting code (abc-defg-hij)."""
         part1 = secrets.token_urlsafe(3)[:3].lower()
         part2 = secrets.token_urlsafe(4)[:4].lower()
         part3 = secrets.token_urlsafe(3)[:3].lower()
@@ -22,7 +21,6 @@ class MeetingRepository:
     async def create(self, host_id: UUID, data: dict) -> Meeting:
         try:
             code = self.generate_meeting_code()
-            # Ensure unique collision clearance for links
             link = MEETING_URL_FORMAT.format(code=code)
 
             meeting = Meeting(
@@ -79,7 +77,7 @@ class MeetingRepository:
 
     async def create_participant(
         self,
-        meeting_id: UUID,
+        session_id: UUID,
         user_id: Optional[UUID],
         guest_name: Optional[str],
         guest_email: Optional[str],
@@ -88,7 +86,7 @@ class MeetingRepository:
     ) -> MeetingParticipant:
         try:
             participant = MeetingParticipant(
-                meeting_id=meeting_id,
+                session_id=session_id,
                 user_id=user_id,
                 guest_name=guest_name,
                 guest_email=guest_email,
@@ -108,8 +106,8 @@ class MeetingRepository:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_active_participant(self, meeting_id: UUID, user_id: Optional[UUID] = None, guest_email: Optional[str] = None) -> Optional[MeetingParticipant]:
-        conditions = [MeetingParticipant.meeting_id == meeting_id, MeetingParticipant.left_at.is_(None), MeetingParticipant.status.notin_([ParticipantStatus.LEFT, ParticipantStatus.REMOVED, ParticipantStatus.REJECTED])]
+    async def get_active_participant(self, session_id: UUID, user_id: Optional[UUID] = None, guest_email: Optional[str] = None) -> Optional[MeetingParticipant]:
+        conditions = [MeetingParticipant.session_id == session_id, MeetingParticipant.left_at.is_(None), MeetingParticipant.status.notin_([ParticipantStatus.LEFT, ParticipantStatus.REMOVED, ParticipantStatus.REJECTED])]
         if user_id:
             conditions.append(MeetingParticipant.user_id == user_id)
         elif guest_email:
@@ -121,8 +119,8 @@ class MeetingRepository:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_last_participant(self, meeting_id: UUID, user_id: Optional[UUID] = None, guest_email: Optional[str] = None) -> Optional[MeetingParticipant]:
-        conditions = [MeetingParticipant.meeting_id == meeting_id]
+    async def get_last_participant(self, session_id: UUID, user_id: Optional[UUID] = None, guest_email: Optional[str] = None) -> Optional[MeetingParticipant]:
+        conditions = [MeetingParticipant.session_id == session_id]
         if user_id:
             conditions.append(MeetingParticipant.user_id == user_id)
         elif guest_email:
@@ -134,9 +132,9 @@ class MeetingRepository:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_participants_list(self, meeting_id: UUID, active_only: bool = True) -> Sequence[MeetingParticipant]:
+    async def get_participants_by_session(self, session_id: UUID, active_only: bool = True) -> Sequence[MeetingParticipant]:
         from app.models.user import User
-        conditions = [MeetingParticipant.meeting_id == meeting_id]
+        conditions = [MeetingParticipant.session_id == session_id]
         if active_only:
             conditions.append(MeetingParticipant.status.in_([ParticipantStatus.WAITING, ParticipantStatus.ADMITTED]))
         stmt = (
@@ -147,7 +145,24 @@ class MeetingRepository:
         )
         result = await self.db.execute(stmt)
         rows = result.all()
-        # Attach user_name as a transient attribute for response serialization
+        for participant, full_name in rows:
+            participant.user_name = full_name
+        return [row[0] for row in rows]
+
+    async def get_participants_by_meeting(self, meeting_id: UUID, active_only: bool = True) -> Sequence[MeetingParticipant]:
+        from app.models.user import User
+        conditions = [MeetingParticipant.session_id == MeetingSession.id, MeetingSession.meeting_id == meeting_id]
+        if active_only:
+            conditions.append(MeetingParticipant.status.in_([ParticipantStatus.WAITING, ParticipantStatus.ADMITTED]))
+        stmt = (
+            select(MeetingParticipant, User.full_name)
+            .outerjoin(User, MeetingParticipant.user_id == User.id)
+            .join(MeetingSession, MeetingParticipant.session_id == MeetingSession.id)
+            .where(and_(*conditions))
+            .order_by(MeetingParticipant.joined_at.asc())
+        )
+        result = await self.db.execute(stmt)
+        rows = result.all()
         for participant, full_name in rows:
             participant.user_name = full_name
         return [row[0] for row in rows]
@@ -172,12 +187,30 @@ class MeetingRepository:
         stmt = select(MeetingTranscript).where(MeetingTranscript.id == tx_id)
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
+    async def list_recordings_by_session(self, session_id: UUID) -> Sequence[MeetingRecording]:
+        stmt = select(MeetingRecording).where(MeetingRecording.session_id == session_id).order_by(MeetingRecording.created_at.asc())
+        return (await self.db.execute(stmt)).scalars().all()
+
+    async def list_transcripts_by_session(self, session_id: UUID) -> Sequence[MeetingTranscript]:
+        stmt = select(MeetingTranscript).where(MeetingTranscript.session_id == session_id).order_by(MeetingTranscript.created_at.asc())
+        return (await self.db.execute(stmt)).scalars().all()
+
     async def list_recordings_by_meeting(self, meeting_id: UUID) -> Sequence[MeetingRecording]:
-        stmt = select(MeetingRecording).where(MeetingRecording.meeting_id == meeting_id).order_by(MeetingRecording.created_at.asc())
+        stmt = (
+            select(MeetingRecording)
+            .join(MeetingSession, MeetingRecording.session_id == MeetingSession.id)
+            .where(MeetingSession.meeting_id == meeting_id)
+            .order_by(MeetingRecording.created_at.asc())
+        )
         return (await self.db.execute(stmt)).scalars().all()
 
     async def list_transcripts_by_meeting(self, meeting_id: UUID) -> Sequence[MeetingTranscript]:
-        stmt = select(MeetingTranscript).where(MeetingTranscript.meeting_id == meeting_id).order_by(MeetingTranscript.created_at.asc())
+        stmt = (
+            select(MeetingTranscript)
+            .join(MeetingSession, MeetingTranscript.session_id == MeetingSession.id)
+            .where(MeetingSession.meeting_id == meeting_id)
+            .order_by(MeetingTranscript.created_at.asc())
+        )
         return (await self.db.execute(stmt)).scalars().all()
 
     async def delete_recording_meta(self, rec: MeetingRecording) -> None:
@@ -253,32 +286,118 @@ class MeetingRepository:
         stmt = select(MeetingInvitation).where(MeetingInvitation.meeting_id == meeting_id).order_by(MeetingInvitation.name.asc())
         return (await self.db.execute(stmt)).scalars().all()
 
+    async def get_participants_by_session_ids(self, session_ids: set[UUID]) -> Sequence[MeetingParticipant]:
+        from app.models.user import User
+        stmt = (
+            select(MeetingParticipant, User.full_name)
+            .outerjoin(User, MeetingParticipant.user_id == User.id)
+            .where(MeetingParticipant.session_id.in_(session_ids))
+            .order_by(MeetingParticipant.joined_at.asc())
+        )
+        result = await self.db.execute(stmt)
+        rows = result.all()
+        for participant, full_name in rows:
+            participant.user_name = full_name
+        return [row[0] for row in rows]
+
+    async def get_sessions_for_user(self, meeting_id: UUID, user_id: UUID) -> Sequence[MeetingSession]:
+        stmt = (
+            select(MeetingSession)
+            .join(MeetingParticipant, MeetingParticipant.session_id == MeetingSession.id)
+            .where(
+                MeetingSession.meeting_id == meeting_id,
+                MeetingParticipant.user_id == user_id,
+            )
+            .distinct()
+            .order_by(MeetingSession.started_at.desc())
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
+
+    async def get_session_by_recording_id(self, rec_id: UUID) -> Optional[MeetingSession]:
+        stmt = (
+            select(MeetingSession)
+            .join(MeetingRecording, MeetingRecording.session_id == MeetingSession.id)
+            .where(MeetingRecording.id == rec_id)
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def get_session_by_transcript_id(self, tx_id: UUID) -> Optional[MeetingSession]:
+        stmt = (
+            select(MeetingSession)
+            .join(MeetingTranscript, MeetingTranscript.session_id == MeetingSession.id)
+            .where(MeetingTranscript.id == tx_id)
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def get_meeting_by_recording_id(self, rec_id: UUID) -> Optional[Meeting]:
+        stmt = (
+            select(Meeting)
+            .join(MeetingSession, MeetingSession.meeting_id == Meeting.id)
+            .join(MeetingRecording, MeetingRecording.session_id == MeetingSession.id)
+            .where(MeetingRecording.id == rec_id)
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def get_meeting_by_transcript_id(self, tx_id: UUID) -> Optional[Meeting]:
+        stmt = (
+            select(Meeting)
+            .join(MeetingSession, MeetingSession.meeting_id == Meeting.id)
+            .join(MeetingTranscript, MeetingTranscript.session_id == MeetingSession.id)
+            .where(MeetingTranscript.id == tx_id)
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def list_recordings_by_session_ids(self, session_ids: set[UUID]) -> Sequence[MeetingRecording]:
+        stmt = (
+            select(MeetingRecording)
+            .where(MeetingRecording.session_id.in_(session_ids))
+            .order_by(MeetingRecording.created_at.asc())
+        )
+        return (await self.db.execute(stmt)).scalars().all()
+
+    async def list_transcripts_by_session_ids(self, session_ids: set[UUID]) -> Sequence[MeetingTranscript]:
+        stmt = (
+            select(MeetingTranscript)
+            .where(MeetingTranscript.session_id.in_(session_ids))
+            .order_by(MeetingTranscript.created_at.asc())
+        )
+        return (await self.db.execute(stmt)).scalars().all()
+
+
 class MeetingAIAnalysisRepository:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_analysis_placeholder(self, meeting_id: UUID) -> MeetingAIAnalysis:
-        """Initializes a tracking row in a PENDING state before offloading to Celery."""
+    async def create_analysis_placeholder(self, session_id: UUID) -> MeetingAIAnalysis:
         analysis = MeetingAIAnalysis(
-            meeting_id=meeting_id,
+            session_id=session_id,
             status=AIAnalysisStatus.PENDING
         )
         self.db.add(analysis)
         await self.db.flush()
         return analysis
 
-    async def get_by_meeting_id(self, meeting_id: UUID) -> Optional[MeetingAIAnalysis]:
-        """Fetches the latest analysis entry associated with the target session."""
+    async def get_by_session_id(self, session_id: UUID) -> Optional[MeetingAIAnalysis]:
         stmt = (
             select(MeetingAIAnalysis)
-            .where(MeetingAIAnalysis.meeting_id == meeting_id)
+            .where(MeetingAIAnalysis.session_id == session_id)
+            .order_by(MeetingAIAnalysis.created_at.desc())
+            .limit(1)
+        )
+        return (await self.db.execute(stmt)).scalar_one_or_none()
+
+    async def get_by_meeting_id(self, meeting_id: UUID) -> Optional[MeetingAIAnalysis]:
+        stmt = (
+            select(MeetingAIAnalysis)
+            .join(MeetingSession, MeetingAIAnalysis.session_id == MeetingSession.id)
+            .where(MeetingSession.meeting_id == meeting_id)
             .order_by(MeetingAIAnalysis.created_at.desc())
             .limit(1)
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
     async def update_status(self, analysis_id: UUID, status: AIAnalysisStatus, **kwargs) -> None:
-        """Helper to cleanly mutate execution status boundaries and track timestamps."""
         payload = {"status": status, "updated_at": datetime.now(timezone.utc)}
         if status == AIAnalysisStatus.PROCESSING:
             payload["processing_started_at"] = datetime.now(timezone.utc)
@@ -290,3 +409,95 @@ class MeetingAIAnalysisRepository:
         stmt = update(MeetingAIAnalysis).where(MeetingAIAnalysis.id == analysis_id).values(**payload)
         await self.db.execute(stmt)
         await self.db.flush()
+
+
+class MeetingSessionRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def create_session(self, meeting_id: UUID, host_id: UUID) -> MeetingSession:
+        session = MeetingSession(
+            meeting_id=meeting_id,
+            host_id=host_id,
+            status=SessionStatus.ACTIVE,
+        )
+        self.db.add(session)
+        await self.db.flush()
+        return session
+
+    async def get_by_id(self, session_id: UUID) -> MeetingSession | None:
+        stmt = select(MeetingSession).where(MeetingSession.id == session_id)
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_active_session(self, meeting_id: UUID) -> MeetingSession | None:
+        stmt = (
+            select(MeetingSession)
+            .where(
+                MeetingSession.meeting_id == meeting_id,
+                MeetingSession.status == SessionStatus.ACTIVE,
+            )
+            .order_by(MeetingSession.started_at.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_sessions_for_meeting(self, meeting_id: UUID) -> Sequence[MeetingSession]:
+        stmt = (
+            select(MeetingSession)
+            .where(MeetingSession.meeting_id == meeting_id)
+            .order_by(MeetingSession.started_at.desc())
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
+
+    async def update(self, session: MeetingSession, update_data: dict) -> MeetingSession:
+        try:
+            for key, value in update_data.items():
+                setattr(session, key, value)
+            self.db.add(session)
+            await self.db.flush()
+            return session
+        except Exception:
+            await self.db.rollback()
+            raise
+
+    async def finish_session(
+        self,
+        session_id: UUID,
+        status: SessionStatus = SessionStatus.ENDED,
+    ) -> MeetingSession | None:
+        session = await self.get_by_id(session_id)
+        if not session:
+            return None
+        now = datetime.now(timezone.utc)
+        duration = int((now - session.started_at).total_seconds()) if session.started_at else None
+        return await self.update(session, {
+            "status": status,
+            "ended_at": now,
+            "duration_seconds": duration,
+        })
+
+    async def count_participants_for_session(self, session_id: UUID) -> int:
+        """Count distinct users (registered) and guests that participated in a session."""
+        stmt = select(func.count(MeetingParticipant.id)).where(
+            MeetingParticipant.session_id == session_id
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar() or 0
+
+    async def get_participants_for_session(self, session_id: UUID) -> Sequence[MeetingParticipant]:
+        """Return all participants for a session including user names."""
+        from app.models.user import User
+        stmt = (
+            select(MeetingParticipant, User.full_name)
+            .outerjoin(User, MeetingParticipant.user_id == User.id)
+            .where(MeetingParticipant.session_id == session_id)
+            .order_by(MeetingParticipant.joined_at.asc())
+        )
+        result = await self.db.execute(stmt)
+        rows = result.all()
+        for participant, full_name in rows:
+            participant.user_name = full_name
+        return [row[0] for row in rows]

@@ -17,6 +17,7 @@ import MeetingsPage from "../features/meetings/pages/MeetingsPage"
 import MeetingDetailPage from "../features/meetings/pages/MeetingDetailPage"
 import MeetingRoomPage from "../features/meetings/pages/MeetingRoomPage"
 import MeetingJoinPage from "../features/meetings/pages/MeetingJoinPage"
+import SessionDetailPage from "../features/meetings/pages/SessionDetailPage"
 import AuthLayout from "../layouts/AuthLayout"
 import MainLayout from "../layouts/MainLayout"
 
@@ -60,6 +61,7 @@ function AppRoutes() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/meetings" element={<MeetingsPage />} />
         <Route path="/meetings/:id" element={<MeetingDetailPage />} />
+        <Route path="/meetings/:id/sessions/:sessionId" element={<SessionDetailPage />} />
         <Route path="/meetings/:id/room" element={<MeetingRoomPage />} />
         <Route path="/whiteboards" element={<WhiteboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />

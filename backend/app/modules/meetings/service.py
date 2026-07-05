@@ -1,3 +1,4 @@
+from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 import jwt
 from typing import Optional, Sequence, List
@@ -6,24 +7,28 @@ from uuid import UUID
 from fastapi import HTTPException, status
 
 from app.core.storage import StorageService
-from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysisRepository
+from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysisRepository, MeetingSessionRepository
 from app.modules.meetings.ai_provider_service import AIProviderService
-from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation, AIAnalysisStatus, MeetingAIAnalysis
+from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation, MeetingSession, AIAnalysisStatus, MeetingAIAnalysis
 from app.modules.meetings.schemas import MeetingCreate, MeetingUpdate, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse
-from app.modules.meetings.enums import MeetingStatus, MeetingType, ParticipantType, ParticipantStatus, AIAnalysisStatus
+from app.modules.meetings.enums import MeetingStatus, MeetingType, ParticipantType, ParticipantStatus, SessionStatus, AIAnalysisStatus
 from app.modules.meetings.exceptions import (
     MeetingNotFoundException,
     MeetingAccessDeniedException,
+    SessionAccessDeniedException,
     MeetingValidationError
 )
 from app.core.config import settings
 from app.core.logger import logger
 from app.workers.tasks import send_async_email
+from redis.asyncio import Redis
 
 class MeetingService:
-    def __init__(self, repo: MeetingRepository, storage: StorageService):
+    def __init__(self, repo: MeetingRepository, storage: StorageService, session_service: MeetingSessionService, auth_service=None):
         self.repo = repo
         self.storage = storage
+        self.session_service = session_service
+        self.auth_service = auth_service
 
     async def create_meeting(self, host_id: UUID, payload: MeetingCreate) -> Meeting:
         return await self.repo.create(host_id, payload.model_dump())
@@ -39,7 +44,7 @@ class MeetingService:
         meeting = await self.get_meeting(meeting_id)
         if meeting.host_id != user_id:
             raise MeetingAccessDeniedException(meeting_id, user_id)
-        if meeting.status == MeetingStatus.CANCELLED:
+        if meeting.status in (MeetingStatus.CANCELLED, MeetingStatus.ENDED):
             raise MeetingValidationError(f"Cannot update a meeting that has already been {meeting.status.value.lower()}.")
 
         return await self.repo.update(meeting, payload.model_dump(exclude_unset=True))
@@ -68,26 +73,38 @@ class MeetingService:
                     update["can_start_screen_share"] = False
                 await self.repo.update_participant(p, update)
 
-        result = await self.repo.update(meeting, {"status": MeetingStatus.IDLE, "ended_at": now, "active_screen_sharer_id": None})
+        active_session = await self.session_service.get_active_session(meeting_id)
+        if active_session:
+            await self.session_service.finish_session(active_session.id)
 
-        await self._trigger_completion_pipeline(meeting_id)
+        new_status = MeetingStatus.ENDED if meeting.meeting_type == MeetingType.SCHEDULED else MeetingStatus.IDLE
+        result = await self.repo.update(meeting, {"status": new_status, "ended_at": now, "active_screen_sharer_id": None})
+
+        if active_session:
+            await self._trigger_completion_pipeline(active_session.id)
 
         return result
 
-    async def _trigger_completion_pipeline(self, meeting_id: UUID) -> None:
+    async def _trigger_completion_pipeline(self, session_id: UUID) -> None:
         from app.workers.tasks import analyze_meeting_transcript
 
         try:
-            analyze_meeting_transcript.delay(str(meeting_id))
+            analyze_meeting_transcript.delay(str(session_id))
         except Exception as e:
-            logger.error(f"Failed to queue completion pipeline for meeting {meeting_id}: {e}")
+            logger.error(f"Failed to queue completion pipeline for meeting session {session_id}: {e}")
 
     async def cancel_meeting(self, user_id: UUID, meeting_id: UUID) -> Meeting:
         meeting = await self.get_meeting(meeting_id)
         if meeting.host_id != user_id:
             raise MeetingAccessDeniedException(meeting_id, user_id)
         if meeting.status == MeetingStatus.CANCELLED:
-            raise MeetingValidationError(f"Meeting has already reached a terminated '{meeting.status.value}' state.")
+            raise MeetingValidationError("Meeting has already been cancelled.")
+        if meeting.status == MeetingStatus.ENDED:
+            raise MeetingValidationError("Cannot cancel a meeting that has already ended.")
+
+        active_session = await self.session_service.get_active_session(meeting_id)
+        if active_session:
+            await self.session_service.finish_session(active_session.id)
 
         return await self.repo.update(meeting, {"status": MeetingStatus.CANCELLED, "ended_at": datetime.now(timezone.utc), "active_screen_sharer_id": None})
 
@@ -95,6 +112,7 @@ class MeetingService:
         meeting = await self.get_meeting(meeting_id)
         if meeting.host_id != user_id:
             raise MeetingAccessDeniedException(meeting_id, user_id)
+        await self.session_service.remove_live_state(meeting_id)
         await self.repo.soft_delete(meeting)
         return meeting
 
@@ -109,7 +127,10 @@ class MeetingService:
         return meeting, host_name
 
     async def leave_meeting_flow(self, meeting_id: UUID, user_id: Optional[UUID] = None, guest_email: Optional[str] = None) -> None:
-        participant = await self.repo.get_active_participant(meeting_id, user_id=user_id, guest_email=guest_email)
+        session = await self.session_service.get_active_session(meeting_id)
+        if not session:
+            return
+        participant = await self.repo.get_active_participant(session.id, user_id=user_id, guest_email=guest_email)
         if participant:
             await self._clear_screen_sharer_if_needed(meeting_id, participant.id)
             await self.repo.update_participant(participant, {
@@ -118,24 +139,37 @@ class MeetingService:
             })
             await self._transition_to_idle_if_empty(meeting_id)
 
-    async def list_participants(self, meeting_id: UUID) -> Sequence[MeetingParticipant]:
-        await self.get_meeting(meeting_id)
-        return await self.repo.get_participants_list(meeting_id)
+    async def list_participants(self, meeting_id: UUID, user_id: Optional[UUID] = None) -> Sequence[MeetingParticipant]:
+        meeting = await self.get_meeting(meeting_id)
+        is_host = (user_id is not None and meeting.host_id == user_id)
+        if is_host:
+            return await self.repo.get_participants_by_meeting(meeting_id)
+        if user_id is not None:
+            accessible_ids = await self.auth_service.get_accessible_session_ids(user_id, meeting_id)
+            if not accessible_ids:
+                return []
+            return await self.repo.get_participants_by_session_ids(accessible_ids)
+        return []
 
-    async def save_recording_file(self, meeting_id: UUID, file, duration: Optional[float] = None) -> MeetingRecording:
-        await self.get_meeting(meeting_id)
+    async def save_recording_file(self, meeting_id: UUID, user_id: UUID, file, duration: Optional[float] = None) -> MeetingRecording:
+        meeting = await self.get_meeting(meeting_id)
+        active_session = await self.session_service.get_active_session(meeting_id)
+        if not active_session:
+            raise MeetingValidationError("No active session for this meeting.")
+
+        await self.auth_service.verify_session_access(active_session.id, user_id, meeting_id)
 
         content = await file.read()
         content_type = file.content_type or "audio/webm"
         result = await self.storage.save_recording(
-            meeting_id=meeting_id,
+            session_id=active_session.id,
             filename=file.filename or "recording.webm",
             content=content,
             content_type=content_type,
         )
 
         recording_data = {
-            "meeting_id": meeting_id,
+            "session_id": active_session.id,
             "filename": result["filename"],
             "content_type": content_type,
             "size": result["size"],
@@ -144,19 +178,24 @@ class MeetingService:
         }
         return await self.repo.add_recording(recording_data)
 
-    async def save_transcript_file(self, meeting_id: UUID, file, content_type: str = "text/plain") -> MeetingTranscript:
-        await self.get_meeting(meeting_id)
+    async def save_transcript_file(self, meeting_id: UUID, user_id: UUID, file, content_type: str = "text/plain") -> MeetingTranscript:
+        meeting = await self.get_meeting(meeting_id)
+        active_session = await self.session_service.get_active_session(meeting_id)
+        if not active_session:
+            raise MeetingValidationError("No active session for this meeting.")
+
+        await self.auth_service.verify_session_access(active_session.id, user_id, meeting_id)
 
         content = await file.read()
         result = await self.storage.save_transcript(
-            meeting_id=meeting_id,
+            session_id=active_session.id,
             filename=file.filename or "transcript.txt",
             content=content,
             content_type=content_type,
         )
 
         transcript_data = {
-            "meeting_id": meeting_id,
+            "session_id": active_session.id,
             "filename": result["filename"],
             "content_type": content_type,
             "size": result["size"],
@@ -164,37 +203,75 @@ class MeetingService:
         }
         return await self.repo.add_transcript(transcript_data)
 
-    async def get_recording_artifact(self, rec_id: UUID) -> MeetingRecording:
+    async def get_recording_artifact(self, rec_id: UUID, user_id: Optional[UUID] = None) -> MeetingRecording:
         rec = await self.repo.get_recording_by_id(rec_id)
         if not rec or not self.storage.exists(rec.storage_path):
             raise MeetingNotFoundException(rec_id)
+        session = await self.repo.get_session_by_recording_id(rec_id)
+        if not session:
+            raise MeetingNotFoundException(rec_id)
+        meeting = await self.repo.get_by_id(session.meeting_id)
+        if not meeting:
+            raise MeetingNotFoundException(rec_id)
+        await self.auth_service.verify_session_access(session.id, user_id, meeting.id)
         return rec
 
-    async def get_transcript_artifact(self, tx_id: UUID) -> MeetingTranscript:
+    async def get_transcript_artifact(self, tx_id: UUID, user_id: Optional[UUID] = None) -> MeetingTranscript:
         tx = await self.repo.get_transcript_by_id(tx_id)
         if not tx or not self.storage.exists(tx.storage_path):
             raise MeetingNotFoundException(tx_id)
+        session = await self.repo.get_session_by_transcript_id(tx_id)
+        if not session:
+            raise MeetingNotFoundException(tx_id)
+        meeting = await self.repo.get_by_id(session.meeting_id)
+        if not meeting:
+            raise MeetingNotFoundException(tx_id)
+        await self.auth_service.verify_session_access(session.id, user_id, meeting.id)
         return tx
 
-    async def list_recordings(self, meeting_id: UUID) -> Sequence[MeetingRecording]:
-        await self.get_meeting(meeting_id)
-        return await self.repo.list_recordings_by_meeting(meeting_id)
+    async def list_recordings(self, meeting_id: UUID, user_id: Optional[UUID] = None) -> Sequence[MeetingRecording]:
+        meeting = await self.get_meeting(meeting_id)
+        is_host = (user_id is not None and meeting.host_id == user_id)
+        if is_host:
+            return await self.repo.list_recordings_by_meeting(meeting_id)
+        accessible_ids = await self.auth_service.get_accessible_session_ids(user_id, meeting_id)
+        if not accessible_ids:
+            return []
+        return await self.repo.list_recordings_by_session_ids(accessible_ids)
 
-    async def list_transcripts(self, meeting_id: UUID) -> Sequence[MeetingTranscript]:
-        await self.get_meeting(meeting_id)
-        return await self.repo.list_transcripts_by_meeting(meeting_id)
+    async def list_transcripts(self, meeting_id: UUID, user_id: Optional[UUID] = None) -> Sequence[MeetingTranscript]:
+        meeting = await self.get_meeting(meeting_id)
+        is_host = (user_id is not None and meeting.host_id == user_id)
+        if is_host:
+            return await self.repo.list_transcripts_by_meeting(meeting_id)
+        accessible_ids = await self.auth_service.get_accessible_session_ids(user_id, meeting_id)
+        if not accessible_ids:
+            return []
+        return await self.repo.list_transcripts_by_session_ids(accessible_ids)
 
-    async def remove_recording(self, rec_id: UUID) -> None:
+    async def remove_recording(self, rec_id: UUID, user_id: Optional[UUID] = None) -> None:
         rec = await self.repo.get_recording_by_id(rec_id)
-        if rec:
-            await self.storage.delete_file(rec.storage_path)
-            await self.repo.delete_recording_meta(rec)
+        if not rec:
+            return
+        meeting = await self.repo.get_meeting_by_recording_id(rec_id)
+        if not meeting:
+            raise MeetingNotFoundException(rec_id)
+        if user_id is None or meeting.host_id != user_id:
+            raise MeetingAccessDeniedException(meeting.id, user_id or UUID(int=0))
+        await self.storage.delete_file(rec.storage_path)
+        await self.repo.delete_recording_meta(rec)
 
-    async def remove_transcript(self, tx_id: UUID) -> None:
+    async def remove_transcript(self, tx_id: UUID, user_id: Optional[UUID] = None) -> None:
         tx = await self.repo.get_transcript_by_id(tx_id)
-        if tx:
-            await self.storage.delete_file(tx.storage_path)
-            await self.repo.delete_transcript_meta(tx)
+        if not tx:
+            return
+        meeting = await self.repo.get_meeting_by_transcript_id(tx_id)
+        if not meeting:
+            raise MeetingNotFoundException(tx_id)
+        if user_id is None or meeting.host_id != user_id:
+            raise MeetingAccessDeniedException(meeting.id, user_id or UUID(int=0))
+        await self.storage.delete_file(tx.storage_path)
+        await self.repo.delete_transcript_meta(tx)
 
     async def join_meeting_flow(self, meeting_id: UUID, user_id: Optional[UUID] = None, guest_name: Optional[str] = None, guest_email: Optional[str] = None) -> MeetingParticipant:
         meeting = await self.repo.get_by_id(meeting_id, include_deleted=True)
@@ -205,8 +282,10 @@ class MeetingService:
         if meeting.status == MeetingStatus.CANCELLED:
             raise MeetingValidationError("The meeting link is invalid or the meeting has been cancelled.")
 
-        # Reusable rooms: ENDED or IDLE meetings can be rejoined (reactivate)
+        # Only INSTANT meetings are reusable — SCHEDULED meetings cannot be rejoined
         if meeting.status in (MeetingStatus.ENDED, MeetingStatus.IDLE):
+            if meeting.meeting_type == MeetingType.SCHEDULED:
+                raise MeetingValidationError("This meeting has ended and cannot be rejoined.")
             await self.repo.update(meeting, {"status": MeetingStatus.ACTIVE, "ended_at": None})
             meeting.status = MeetingStatus.ACTIVE
 
@@ -234,19 +313,25 @@ class MeetingService:
             await self.repo.update(meeting, {"status": MeetingStatus.ACTIVE})
             meeting.status = MeetingStatus.ACTIVE
 
+        # Ensure an active session exists for the meeting
+        active_session = None
+        if meeting.status == MeetingStatus.ACTIVE:
+            active_session = await self.session_service.get_active_session(meeting.id)
+            if not active_session:
+                active_session = await self.session_service.create_session(meeting.id, meeting.host_id)
+
         initial_status = ParticipantStatus.ADMITTED if is_host else ParticipantStatus.WAITING
 
         if user_id:
             p_type = ParticipantType.REGISTERED
-            existing = await self.repo.get_active_participant(meeting_id, user_id=user_id)
+            existing = await self.repo.get_active_participant(active_session.id, user_id=user_id)
             if existing:
                 if existing.status == ParticipantStatus.REMOVED:
                     raise MeetingAccessDeniedException(meeting_id, user_id)
                 if is_host and not existing.can_start_screen_share:
                     await self.repo.update_participant(existing, {"can_start_screen_share": True})
                 return existing
-            # Reuse a LEFT participant record instead of creating a new one
-            last = await self.repo.get_last_participant(meeting_id, user_id=user_id)
+            last = await self.repo.get_last_participant(active_session.id, user_id=user_id)
             if last and last.status == ParticipantStatus.LEFT:
                 now = datetime.now(timezone.utc)
                 await self.repo.update_participant(last, {
@@ -262,15 +347,14 @@ class MeetingService:
                 raise MeetingValidationError("Guest email is required to join a temporary session.")
             guest_email = guest_email.strip().lower()
             p_type = ParticipantType.GUEST
-            existing = await self.repo.get_active_participant(meeting_id, guest_email=guest_email)
+            existing = await self.repo.get_active_participant(active_session.id, guest_email=guest_email)
             if existing:
                 if existing.status == ParticipantStatus.REMOVED:
                     raise MeetingValidationError("You have been removed from this meeting room container.")
                 if guest_name:
                     await self.repo.update_participant(existing, {"guest_name": guest_name.strip()})
                 return existing
-            # Reuse a LEFT participant record instead of creating a new one
-            last = await self.repo.get_last_participant(meeting_id, guest_email=guest_email)
+            last = await self.repo.get_last_participant(active_session.id, guest_email=guest_email)
             if last and last.status == ParticipantStatus.LEFT:
                 now = datetime.now(timezone.utc)
                 update_data = {
@@ -285,7 +369,7 @@ class MeetingService:
                 return last
 
         participant = await self.repo.create_participant(
-            meeting_id=meeting_id,
+            session_id=active_session.id,
             user_id=user_id,
             guest_name=guest_name.strip() if guest_name else None,
             guest_email=guest_email,
@@ -303,8 +387,7 @@ class MeetingService:
             raise MeetingAccessDeniedException(meeting_id, executioner_id)
 
         participant = await self.repo.get_participant_by_id(participant_id)
-        if not participant or participant.meeting_id != meeting_id:
-            raise MeetingValidationError("Target participant node context matching failed.")
+        await self._validate_participant_in_meeting(participant, meeting_id)
 
         # Validate state transitions
         if new_status == ParticipantStatus.ADMITTED:
@@ -334,22 +417,27 @@ class MeetingService:
             raise MeetingAccessDeniedException(meeting_id, executioner_id)
 
         participant = await self.repo.get_participant_by_id(participant_id)
-        if not participant or participant.meeting_id != meeting_id:
-            raise MeetingValidationError("Target participant node context matching failed.")
+        await self._validate_participant_in_meeting(participant, meeting_id)
 
         participant = await self.repo.update_participant(participant, {"is_muted": mute})
         return participant
 
     async def _transition_to_idle_if_empty(self, meeting_id: UUID) -> None:
-        participants = await self.repo.get_participants_list(meeting_id, active_only=True)
+        participants = await self.repo.get_participants_by_meeting(meeting_id, active_only=True)
         if len(participants) == 0:
             meeting = await self.repo.get_by_id(meeting_id, include_deleted=True)
             if meeting and meeting.status != MeetingStatus.IDLE:
                 await self.repo.update(meeting, {"status": MeetingStatus.IDLE})
 
     async def leave_meeting(self, meeting_id: UUID, user_id: Optional[UUID] = None, guest_email: Optional[str] = None) -> MeetingParticipant:
-        participant = await self.repo.get_active_participant(meeting_id, user_id=user_id, guest_email=guest_email)
+        session = await self.session_service.get_active_session(meeting_id)
+        if not session:
+            raise MeetingValidationError("No active session found for this meeting.")
+        participant = await self.repo.get_active_participant(session.id, user_id=user_id, guest_email=guest_email)
         if not participant:
+            last = await self.repo.get_last_participant(session.id, user_id=user_id, guest_email=guest_email)
+            if last and last.status == ParticipantStatus.LEFT:
+                return last
             raise MeetingValidationError("You are not an active participant in this meeting.")
         if participant.status == ParticipantStatus.WAITING:
             raise MeetingValidationError("You have not been admitted yet. Use reject to leave the waiting room.")
@@ -363,7 +451,7 @@ class MeetingService:
         return participant
 
     async def get_waiting_count(self, meeting_id: UUID) -> int:
-        participants = await self.repo.get_participants_list(meeting_id)
+        participants = await self.repo.get_participants_by_meeting(meeting_id)
         return sum(1 for p in participants if p.status == ParticipantStatus.WAITING)
 
     async def request_screen_share(self, meeting_id: UUID, participant_id: UUID) -> MeetingParticipant:
@@ -374,9 +462,7 @@ class MeetingService:
             raise MeetingValidationError("Meeting is not active.")
         participant = await self.repo.get_participant_by_id(participant_id)
         logger.info("[screen_share_request] participant_id=%s participant.status=%s meeting.status=%s can_start_screen_share=%s reason=checking_participant_exists", participant_id, participant.status.value if participant else "NOT_FOUND", meeting.status.value, participant.can_start_screen_share if participant else "N/A")
-        if not participant or participant.meeting_id != meeting_id:
-            logger.warning("[screen_share_request] REJECTED participant_id=%s reason=participant_not_found meeting_id=%s", participant_id, meeting_id)
-            raise MeetingValidationError("Participant not found.")
+        await self._validate_participant_in_meeting(participant, meeting_id)
         if participant.status != ParticipantStatus.ADMITTED:
             logger.warning("[screen_share_request] REJECTED participant_id=%s participant.status=%s reason=not_admitted", participant_id, participant.status.value)
             raise MeetingValidationError("Participant must be admitted to request screen share.")
@@ -391,8 +477,7 @@ class MeetingService:
         if meeting.host_id != host_id:
             raise MeetingAccessDeniedException(meeting_id, host_id)
         participant = await self.repo.get_participant_by_id(participant_id)
-        if not participant or participant.meeting_id != meeting_id:
-            raise MeetingValidationError("Participant not found.")
+        await self._validate_participant_in_meeting(participant, meeting_id)
         participant = await self.repo.update_participant(participant, {"can_start_screen_share": True})
         return participant
 
@@ -401,8 +486,7 @@ class MeetingService:
         if meeting.host_id != host_id:
             raise MeetingAccessDeniedException(meeting_id, host_id)
         participant = await self.repo.get_participant_by_id(participant_id)
-        if not participant or participant.meeting_id != meeting_id:
-            raise MeetingValidationError("Participant not found.")
+        await self._validate_participant_in_meeting(participant, meeting_id)
         return participant
 
     async def start_screen_share(self, meeting_id: UUID, participant_id: UUID, user_id: Optional[UUID] = None, guest_name: Optional[str] = None) -> Meeting:
@@ -413,8 +497,7 @@ class MeetingService:
             raise MeetingValidationError("Another participant is already sharing their screen.")
 
         participant = await self.repo.get_participant_by_id(participant_id)
-        if not participant or participant.meeting_id != meeting_id:
-            raise MeetingValidationError("Participant not found.")
+        await self._validate_participant_in_meeting(participant, meeting_id)
 
         is_host = user_id is not None and meeting.host_id == user_id
         if not is_host and not participant.can_start_screen_share:
@@ -436,6 +519,14 @@ class MeetingService:
             raise MeetingAccessDeniedException(meeting_id, host_id)
         meeting = await self.repo.update(meeting, {"active_screen_sharer_id": None})
         return meeting
+
+    async def _validate_participant_in_meeting(self, participant: MeetingParticipant | None, meeting_id: UUID) -> MeetingSession:
+        if not participant:
+            raise MeetingValidationError("Target participant not found.")
+        session = await self.session_service.repo.get_by_id(participant.session_id)
+        if not session or session.meeting_id != meeting_id:
+            raise MeetingValidationError("Target participant node context matching failed.")
+        return session
 
     @staticmethod
     def generate_meeting_session_token(participant_id: UUID, meeting_id: UUID) -> str:
@@ -523,6 +614,12 @@ class MeetingService:
         meeting.invited_participants_count = len(payload.invitations)
         return meeting
 
+    async def list_meeting_invitations(self, meeting_id: UUID, user_id: UUID) -> Sequence[MeetingInvitation]:
+        meeting = await self.get_meeting(meeting_id)
+        if meeting.host_id != user_id:
+            raise MeetingAccessDeniedException(meeting_id, user_id)
+        return await self.repo.list_invitations(meeting_id)
+
     async def add_invitations(self, user_id: UUID, meeting_id: UUID, invites: List[InvitationCreate]) -> List[MeetingInvitation]:
         meeting = await self.get_meeting(meeting_id)
         if meeting.host_id != user_id:
@@ -559,8 +656,8 @@ class MeetingAIAnalysisService:
         self.repo = repo
         self.provider = provider
 
-    async def get_analysis(self, meeting_id: UUID) -> MeetingAIAnalysis:
-        analysis = await self.repo.get_by_meeting_id(meeting_id)
+    async def get_analysis(self, session_id: UUID) -> MeetingAIAnalysis:
+        analysis = await self.repo.get_by_session_id(session_id)
         if not analysis:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -573,8 +670,8 @@ class MeetingAIAnalysisService:
             )
         return analysis
 
-    async def get_analysis_status(self, meeting_id: UUID) -> MeetingAIAnalysis:
-        analysis = await self.repo.get_by_meeting_id(meeting_id)
+    async def get_analysis_status(self, session_id: UUID) -> MeetingAIAnalysis:
+        analysis = await self.repo.get_by_session_id(session_id)
         if not analysis:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -582,14 +679,14 @@ class MeetingAIAnalysisService:
             )
         return analysis
 
-    async def process_async_transcript_analysis(self, meeting_id: UUID, agenda: str, transcript_text: str) -> None:
+    async def process_async_transcript_analysis(self, session_id: UUID, agenda: str, transcript_text: str) -> None:
         """
         Executed out-of-process inside the Celery worker pool.
         Handles status updates and persists analysis results only.
         """
-        analysis = await self.repo.get_by_meeting_id(meeting_id)
+        analysis = await self.repo.get_by_session_id(session_id)
         if not analysis:
-            analysis = await self.repo.create_analysis_placeholder(meeting_id)
+            analysis = await self.repo.create_analysis_placeholder(session_id)
 
         await self.repo.update_status(analysis.id, AIAnalysisStatus.PROCESSING)
 
@@ -615,3 +712,115 @@ class MeetingAIAnalysisService:
                 raw_response={"error_log_payload": str(e)}
             )
             raise e
+
+
+class MeetingSessionService:
+    def __init__(self, repo: MeetingSessionRepository, redis: Redis, meeting_repo=None):
+        self.repo = repo
+        self.redis = redis
+        self._meeting_repo = meeting_repo  # injected for session history queries
+
+    async def create_session(self, meeting_id: UUID, host_id: UUID) -> MeetingSession:
+        session = await self.repo.create_session(meeting_id, host_id)
+        await self._init_redis_state(session)
+        return session
+
+    async def finish_session(self, session_id: UUID) -> MeetingSession | None:
+        session = await self.repo.finish_session(session_id, status=SessionStatus.ENDED)
+        if session:
+            await self._clear_redis_state(session.meeting_id)
+        return session
+
+    async def get_active_session(self, meeting_id: UUID) -> MeetingSession | None:
+        redis_data = await self._get_redis_session(meeting_id)
+        if redis_data:
+            session_id = UUID(redis_data["session_id"])
+            session = await self.repo.get_by_id(session_id)
+            if session and session.status == SessionStatus.ACTIVE:
+                return session
+            await self._clear_redis_state(meeting_id)
+        session = await self.repo.get_active_session(meeting_id)
+        if session:
+            await self._init_redis_state(session)
+        return session
+
+    async def remove_live_state(self, meeting_id: UUID) -> None:
+        await self._clear_redis_state(meeting_id)
+
+    async def list_sessions_for_user(
+        self,
+        meeting_id: UUID,
+        user_id: UUID,
+        host_id: UUID,
+    ) -> list:
+        """
+        Return all sessions a user is entitled to see:
+        - Host → all sessions for the meeting (ordered newest first).
+        - Registered participant → only sessions they actually attended.
+        Guests never have session history (caller must gate on user_id != None).
+        """
+        from app.modules.meetings.repository import MeetingRepository
+        is_host = (user_id == host_id)
+        if is_host:
+            sessions = await self.repo.get_sessions_for_meeting(meeting_id)
+        else:
+            # get_sessions_for_user lives on MeetingRepository, not MeetingSessionRepository
+            # We need a MeetingRepository reference — passed via the auth service repo
+            meeting_repo: MeetingRepository = self._meeting_repo
+            sessions = await meeting_repo.get_sessions_for_user(meeting_id, user_id)
+
+        result = []
+        for session in sessions:
+            count = await self.repo.count_participants_for_session(session.id)
+            session.participant_count = count
+            result.append(session)
+        return result
+
+    async def get_session_detail(
+        self,
+        meeting_id: UUID,
+        session_id: UUID,
+        user_id: UUID,
+        host_id: UUID,
+    ):
+        """
+        Return a single session's detail if the user has access.
+        Raises SessionAccessDeniedException if they don't.
+        """
+        from app.modules.meetings.exceptions import SessionAccessDeniedException
+
+        session = await self.repo.get_by_id(session_id)
+        if not session or session.meeting_id != meeting_id:
+            raise SessionAccessDeniedException(session_id, user_id)
+
+        is_host = (user_id == host_id)
+        if not is_host:
+            # participant must have attended this session
+            meeting_repo = self._meeting_repo
+            participant = await meeting_repo.get_last_participant(session_id, user_id=user_id)
+            if not participant:
+                raise SessionAccessDeniedException(session_id, user_id)
+
+        participants = await self.repo.get_participants_for_session(session_id)
+        session.participants = participants
+        return session
+
+    async def _init_redis_state(self, session: MeetingSession) -> None:
+        key = f"meeting:{session.meeting_id}"
+        await self.redis.hset(key, mapping={
+            "session_id": str(session.id),
+            "status": session.status.value,
+            "host_id": str(session.host_id),
+            "started_at": session.started_at.isoformat(),
+        })
+
+    async def _get_redis_session(self, meeting_id: UUID) -> dict | None:
+        key = f"meeting:{meeting_id}"
+        data = await self.redis.hgetall(key)
+        if not data:
+            return None
+        return {k.decode(): v.decode() for k, v in data.items()}
+
+    async def _clear_redis_state(self, meeting_id: UUID) -> None:
+        key = f"meeting:{meeting_id}"
+        await self.redis.delete(key)

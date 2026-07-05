@@ -117,4 +117,9 @@ export const joinMeetingSchema = z.object({
     .string()
     .min(1, "Name is required")
     .max(100, "Name must be 100 characters or fewer"),
+  guest_email: z
+    .string()
+    .trim()
+    .min(1, "Email is required")
+    .email("Please enter a valid email address"),
 })

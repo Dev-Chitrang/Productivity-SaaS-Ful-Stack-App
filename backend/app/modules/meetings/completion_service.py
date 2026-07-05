@@ -6,41 +6,47 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logger import logger
-from app.models.meetings import Meeting, MeetingRecording, MeetingTranscript, MeetingAIAnalysis, MeetingInvitation
+from app.models.meetings import Meeting, MeetingSession, MeetingRecording, MeetingTranscript, MeetingAIAnalysis, MeetingInvitation
 from app.models.user import User
 from app.modules.meetings.enums import AIAnalysisStatus
-from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysisRepository
+from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysisRepository, MeetingSessionRepository
 
 
 class MeetingCompletionService:
     def __init__(self, session: AsyncSession):
         self.meeting_repo = MeetingRepository(session)
+        self.session_repo = MeetingSessionRepository(session)
         self.ai_repo = MeetingAIAnalysisRepository(session)
 
-    async def send_completion_email(self, meeting_id: UUID) -> None:
-        meeting = await self.meeting_repo.get_by_id(meeting_id)
+    async def send_completion_email(self, session_id: UUID) -> None:
+        meeting_session = await self.session_repo.get_by_id(session_id)
+        if not meeting_session:
+            logger.error(f"Session {session_id} not found for completion email")
+            return
+
+        meeting = await self.meeting_repo.get_by_id(meeting_session.meeting_id)
         if not meeting:
-            logger.error(f"Meeting {meeting_id} not found for completion email")
+            logger.error(f"Meeting {meeting_session.meeting_id} not found for completion email")
             return
 
         host = await self.meeting_repo.get_user_by_id(meeting.host_id)
-        invitations = await self.meeting_repo.list_invitations(meeting_id)
-        participants = await self.meeting_repo.get_participants_list(meeting_id, active_only=False)
-        recordings = await self.meeting_repo.list_recordings_by_meeting(meeting_id)
-        transcripts = await self.meeting_repo.list_transcripts_by_meeting(meeting_id)
-        analysis = await self.ai_repo.get_by_meeting_id(meeting_id)
+        invitations = await self.meeting_repo.list_invitations(meeting.id)
+        participants = await self.meeting_repo.get_participants_by_session(session_id, active_only=False)
+        recordings = await self.meeting_repo.list_recordings_by_session(session_id)
+        transcripts = await self.meeting_repo.list_transcripts_by_session(session_id)
+        analysis = await self.ai_repo.get_by_session_id(session_id)
 
         recipients = await self._build_recipient_list(host, invitations, participants)
 
         if not recipients:
-            logger.warning(f"No recipients found for meeting {meeting_id} completion email")
+            logger.warning(f"No recipients found for session {session_id} completion email")
             return
 
         context = self._build_email_context(meeting, recordings, transcripts, analysis)
         attachments = await self._build_attachments(transcripts, recordings)
         self._dispatch_emails(context, recipients, attachments)
 
-        logger.info(f"Completion email dispatched for meeting {meeting_id} to {len(recipients)} recipient(s)")
+        logger.info(f"Completion email dispatched for session {session_id} to {len(recipients)} recipient(s)")
 
     async def _build_recipient_list(
         self,

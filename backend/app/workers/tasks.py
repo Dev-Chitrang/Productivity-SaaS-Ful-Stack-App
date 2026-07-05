@@ -157,43 +157,49 @@ async def _run_all_reminder_scans():
     retry_backoff=True,
     max_retries=3
 )
-def analyze_meeting_transcript(meeting_id_str: str):
-    """Orchestrates AI analysis and completion email for a meeting.
+def analyze_meeting_transcript(session_id_str: str):
+    """Orchestrates AI analysis and completion email for a meeting session.
 
-    Only receives meeting_id; all other data is loaded from the database.
+    Only receives session_id; all other data is loaded from the database.
     """
     import asyncio
     from uuid import UUID
     from app.core.database import async_session_factory
     from app.core.logger import logger
-    from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysisRepository
+    from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysisRepository, MeetingSessionRepository
     from app.modules.meetings.ai_provider_service import AIProviderService
     from app.modules.meetings.service import MeetingAIAnalysisService
     from app.modules.meetings.completion_service import MeetingCompletionService
     from app.modules.meetings.enums import AIAnalysisStatus
 
-    meeting_id = UUID(meeting_id_str)
+    session_id = UUID(session_id_str)
 
     async def _run():
         async with async_session_factory() as session:
             meeting_repo = MeetingRepository(session)
+            session_repo = MeetingSessionRepository(session)
             ai_repo = MeetingAIAnalysisRepository(session)
 
-            meeting = await meeting_repo.get_by_id(meeting_id)
-            if not meeting:
-                logger.error(f"Meeting {meeting_id} not found for completion pipeline")
+            meeting_session = await session_repo.get_by_id(session_id)
+            if not meeting_session:
+                logger.error(f"Session {session_id} not found for completion pipeline")
                 return
 
-            logger.info(f"Meeting {meeting_id} found for completion pipeline")
+            meeting = await meeting_repo.get_by_id(meeting_session.meeting_id)
+            if not meeting:
+                logger.error(f"Meeting {meeting_session.meeting_id} not found for completion pipeline")
+                return
 
-            transcripts = await meeting_repo.list_transcripts_by_meeting(meeting_id)
-            logger.info(f"Transcript lookup for meeting {meeting_id}: {len(transcripts)} transcript(s) found")
+            logger.info(f"Session {session_id} (meeting {meeting.id}) found for completion pipeline")
+
+            transcripts = await meeting_repo.list_transcripts_by_session(session_id)
+            logger.info(f"Transcript lookup for session {session_id}: {len(transcripts)} transcript(s) found")
 
             analysis_attempted = False
 
             if not transcripts:
-                logger.warning(f"No transcripts found for meeting {meeting_id}, will retry")
-                raise Exception(f"Transcript not yet available for meeting {meeting_id}")
+                logger.warning(f"No transcripts found for session {session_id}, will retry")
+                raise Exception(f"Transcript not yet available for session {session_id}")
 
             transcript_text = ""
             tx_path = transcripts[0].storage_path
@@ -208,10 +214,10 @@ def analyze_meeting_transcript(meeting_id_str: str):
                 raise
 
             if not transcript_text:
-                logger.error(f"Transcript file {tx_path} is empty for meeting {meeting_id}, marking analysis as FAILED")
-                analysis_placeholder = await ai_repo.get_by_meeting_id(meeting_id)
+                logger.error(f"Transcript file {tx_path} is empty for session {session_id}, marking analysis as FAILED")
+                analysis_placeholder = await ai_repo.get_by_session_id(session_id)
                 if not analysis_placeholder:
-                    analysis_placeholder = await ai_repo.create_analysis_placeholder(meeting_id)
+                    analysis_placeholder = await ai_repo.create_analysis_placeholder(session_id)
                 await ai_repo.update_status(
                     analysis_placeholder.id,
                     AIAnalysisStatus.FAILED,
@@ -221,23 +227,23 @@ def analyze_meeting_transcript(meeting_id_str: str):
                 from app.modules.meetings.transcript_preprocessor import preprocess_transcript
                 cleaned_transcript = preprocess_transcript(transcript_text)
 
-                logger.info(f"Starting AI analysis request for meeting {meeting_id}")
+                logger.info(f"Starting AI analysis request for session {session_id}")
 
                 provider = AIProviderService()
                 ai_service = MeetingAIAnalysisService(ai_repo, provider)
                 await ai_service.process_async_transcript_analysis(
-                    meeting_id=meeting_id,
+                    session_id=session_id,
                     agenda=meeting.agenda or "",
                     transcript_text=cleaned_transcript,
                 )
 
                 analysis_attempted = True
-                logger.info(f"AI analysis completed for meeting {meeting_id}")
+                logger.info(f"AI analysis completed for session {session_id}")
 
-            logger.info(f"Starting completion email dispatch for meeting {meeting_id}")
+            logger.info(f"Starting completion email dispatch for session {session_id}")
             completion_service = MeetingCompletionService(session)
-            await completion_service.send_completion_email(meeting_id)
-            logger.info(f"Completion email dispatch completed for meeting {meeting_id}")
+            await completion_service.send_completion_email(session_id)
+            logger.info(f"Completion email dispatch completed for session {session_id}")
 
             await session.commit()
 
