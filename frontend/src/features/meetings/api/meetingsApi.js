@@ -69,4 +69,8 @@ export const meetingsApi = {
 
   deleteTranscript: (transcriptId) =>
     api.delete(`/meetings/transcripts/${transcriptId}`),
+
+  getAnalysis: (meetingId) => api.get(`/meetings/${meetingId}/analysis`),
+
+  getAnalysisStatus: (meetingId) => api.get(`/meetings/${meetingId}/analysis/status`),
 }

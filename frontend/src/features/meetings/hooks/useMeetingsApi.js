@@ -411,3 +411,54 @@ export function useDeleteTranscript() {
     },
   })
 }
+
+// --- AI Analysis hooks ---
+
+export const analysisKeys = {
+  analysis: (meetingId) => ["meetings", meetingId, "analysis"],
+  status: (meetingId) => ["meetings", meetingId, "analysis", "status"],
+}
+
+export function useMeetingAnalysis(meetingId) {
+  return useQuery({
+    queryKey: analysisKeys.analysis(meetingId),
+    queryFn: async () => {
+      try {
+        const { data } = await meetingsApi.getAnalysis(meetingId)
+        return data
+      } catch (error) {
+        if (error?.response?.status === 404) return null
+        throw error
+      }
+    },
+    enabled: !!meetingId,
+    retry: false,
+    staleTime: 30_000,
+  })
+}
+
+export function useMeetingAnalysisStatus(meetingId) {
+  return useQuery({
+    queryKey: analysisKeys.status(meetingId),
+    queryFn: async () => {
+      try {
+        const { data } = await meetingsApi.getAnalysisStatus(meetingId)
+        return data
+      } catch (error) {
+        if (error?.response?.status === 404) return null
+        throw error
+      }
+    },
+    enabled: !!meetingId,
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (data === null) return 5000
+      const status = data?.status
+      if (status === "PENDING") return 5000
+      if (status === "PROCESSING") return 3000
+      return false
+    },
+    staleTime: 0,
+    retry: false,
+  })
+}

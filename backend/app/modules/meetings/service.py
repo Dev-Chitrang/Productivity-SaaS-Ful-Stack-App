@@ -3,11 +3,14 @@ import jwt
 from typing import Optional, Sequence, List
 from uuid import UUID
 
+from fastapi import HTTPException, status
+
 from app.core.storage import StorageService
-from app.modules.meetings.repository import MeetingRepository
-from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation
+from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysisRepository
+from app.modules.meetings.ai_provider_service import AIProviderService
+from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation, AIAnalysisStatus, MeetingAIAnalysis
 from app.modules.meetings.schemas import MeetingCreate, MeetingUpdate, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse
-from app.modules.meetings.enums import MeetingStatus, MeetingType, ParticipantType, ParticipantStatus
+from app.modules.meetings.enums import MeetingStatus, MeetingType, ParticipantType, ParticipantStatus, AIAnalysisStatus
 from app.modules.meetings.exceptions import (
     MeetingNotFoundException,
     MeetingAccessDeniedException,
@@ -65,7 +68,19 @@ class MeetingService:
                     update["can_start_screen_share"] = False
                 await self.repo.update_participant(p, update)
 
-        return await self.repo.update(meeting, {"status": MeetingStatus.IDLE, "ended_at": now, "active_screen_sharer_id": None})
+        result = await self.repo.update(meeting, {"status": MeetingStatus.IDLE, "ended_at": now, "active_screen_sharer_id": None})
+
+        await self._trigger_completion_pipeline(meeting_id)
+
+        return result
+
+    async def _trigger_completion_pipeline(self, meeting_id: UUID) -> None:
+        from app.workers.tasks import analyze_meeting_transcript
+
+        try:
+            analyze_meeting_transcript.delay(str(meeting_id))
+        except Exception as e:
+            logger.error(f"Failed to queue completion pipeline for meeting {meeting_id}: {e}")
 
     async def cancel_meeting(self, user_id: UUID, meeting_id: UUID) -> Meeting:
         meeting = await self.get_meeting(meeting_id)
@@ -538,3 +553,65 @@ class MeetingService:
                     logger.error(f"Failed to send invitation email to {new_invite.email} for meeting {meeting.id}: {e}")
 
         return created_invites
+
+class MeetingAIAnalysisService:
+    def __init__(self, repo: MeetingAIAnalysisRepository, provider: AIProviderService):
+        self.repo = repo
+        self.provider = provider
+
+    async def get_analysis(self, meeting_id: UUID) -> MeetingAIAnalysis:
+        analysis = await self.repo.get_by_meeting_id(meeting_id)
+        if not analysis:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No AI analysis record found for this meeting session."
+            )
+        if analysis.status != AIAnalysisStatus.COMPLETED:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Analysis is not ready. Current tracking state: '{analysis.status}'."
+            )
+        return analysis
+
+    async def get_analysis_status(self, meeting_id: UUID) -> MeetingAIAnalysis:
+        analysis = await self.repo.get_by_meeting_id(meeting_id)
+        if not analysis:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No AI telemetry tracking footprint found for this identifier."
+            )
+        return analysis
+
+    async def process_async_transcript_analysis(self, meeting_id: UUID, agenda: str, transcript_text: str) -> None:
+        """
+        Executed out-of-process inside the Celery worker pool.
+        Handles status updates and persists analysis results only.
+        """
+        analysis = await self.repo.get_by_meeting_id(meeting_id)
+        if not analysis:
+            analysis = await self.repo.create_analysis_placeholder(meeting_id)
+
+        await self.repo.update_status(analysis.id, AIAnalysisStatus.PROCESSING)
+
+        try:
+            result = await self.provider.generate_transcript_analysis(agenda, transcript_text)
+            parsed = result["parsed"]
+
+            await self.repo.update_status(
+                analysis_id=analysis.id,
+                status=AIAnalysisStatus.COMPLETED,
+                summary=parsed["summary"],
+                agenda_coverage_percentage=parsed["coverage_percentage"],
+                covered_points=parsed["covered_points"],
+                out_of_agenda_points=parsed["out_of_agenda_points"],
+                suggested_tasks=parsed["suggested_tasks"],
+                raw_response=result["raw"]
+            )
+
+        except Exception as e:
+            await self.repo.update_status(
+                analysis.id,
+                AIAnalysisStatus.FAILED,
+                raw_response={"error_log_payload": str(e)}
+            )
+            raise e

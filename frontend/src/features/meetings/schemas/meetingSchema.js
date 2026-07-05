@@ -33,6 +33,13 @@ export const createMeetingSchema = z.object({
   enable_ai_analysis: z.boolean().default(false),
   participants: z.array(participantSchema).optional(),
 }).superRefine((data, ctx) => {
+  if (data.enable_ai_analysis && (!data.agenda || !data.agenda.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["agenda"],
+      message: "Agenda is required when AI Analysis is enabled",
+    })
+  }
   if (data.meeting_type === "SCHEDULED") {
     if (!data.scheduled_date) {
       ctx.addIssue({
@@ -95,6 +102,14 @@ export const updateMeetingSchema = z.object({
     .optional()
     .or(z.literal("")),
   enable_ai_analysis: z.boolean().optional(),
+}).superRefine((data, ctx) => {
+  if (data.enable_ai_analysis && (!data.agenda || !data.agenda.trim())) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["agenda"],
+      message: "Agenda is required when AI Analysis is enabled",
+    })
+  }
 })
 
 export const joinMeetingSchema = z.object({

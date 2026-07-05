@@ -21,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { updateMeetingSchema } from "../schemas/meetingSchema"
 import { useUpdateMeeting } from "../hooks/useMeetingsApi"
-import { CalendarBlank, Clock, Globe, Note } from "@phosphor-icons/react"
+import { CalendarBlank, Clock, Globe, Note, Robot } from "@phosphor-icons/react"
 import {
   Select,
   SelectContent,
@@ -266,10 +266,17 @@ export function EditMeetingDialog({ meeting, open, onOpenChange }) {
                   <input
                     type="checkbox"
                     checked={aiAnalysis}
-                    onChange={(e) => setAiAnalysis(e.target.checked)}
+                    onChange={(e) => {
+                      const enabled = e.target.checked
+                      setAiAnalysis(enabled)
+                      if (enabled) {
+                        setTranscript(true)
+                      }
+                    }}
                     className="size-3.5 accent-primary"
                   />
-                  <span className="text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Robot className="size-3" />
                     Enable AI Analysis
                   </span>
                 </label>
@@ -290,14 +297,15 @@ export function EditMeetingDialog({ meeting, open, onOpenChange }) {
                     Enable Recording
                   </span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className={`flex items-center gap-2 ${aiAnalysis ? "" : "cursor-pointer"}`}>
                   <input
                     type="checkbox"
                     checked={transcript}
+                    disabled={aiAnalysis}
                     onChange={(e) => setTranscript(e.target.checked)}
                     className="size-3.5 accent-primary"
                   />
-                  <span className="text-xs text-muted-foreground">
+                  <span className={`text-xs ${aiAnalysis ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
                     Enable Transcript
                   </span>
                 </label>

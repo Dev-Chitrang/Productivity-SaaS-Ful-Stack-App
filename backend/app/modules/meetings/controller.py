@@ -3,12 +3,12 @@ from uuid import UUID
 from fastapi import HTTPException, status, UploadFile
 from fastapi.responses import FileResponse
 
-from app.modules.meetings.service import MeetingService
+from app.modules.meetings.service import MeetingService, MeetingAIAnalysisService
 from app.modules.meetings.schemas import (
     MeetingCreate, MeetingUpdate, MeetingResponse,
     MeetingParticipantResponse, MeetingJoinPayload,
     MeetingJoinInfoResponse, MeetingJoinResponse, TranscriptResponse, RecordingResponse,
-    WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse
+    WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse, AIAnalysisResponse, AIAnalysisStatusResponse, AIAnalysisPayloadSchema
 )
 from app.modules.meetings.exceptions import (
     MeetingNotFoundException, MeetingAccessDeniedException, MeetingValidationError
@@ -192,3 +192,15 @@ class MeetingController:
     async def delete_transcript(self, tx_id: UUID) -> dict:
         await self.service.remove_transcript(tx_id)
         return {"status": "success", "message": "Transcript artifact removed completely."}
+
+class MeetingAIAnalysisController:
+    def __init__(self, service: MeetingAIAnalysisService):
+        self.service = service
+
+    async def get_completed_analysis(self, meeting_id: UUID) -> dict:
+        analysis = await self.service.get_analysis(meeting_id)
+        return AIAnalysisResponse.model_validate(analysis)
+
+    async def get_tracking_status(self, meeting_id: UUID) -> dict:
+        analysis = await self.service.get_analysis_status(meeting_id)
+        return AIAnalysisStatusResponse.model_validate(analysis)

@@ -22,3 +22,9 @@ class ParticipantStatus(str, Enum):
     LEFT = "LEFT"
     REMOVED = "REMOVED"
     REJECTED = "REJECTED"
+
+class AIAnalysisStatus(str, Enum):
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"

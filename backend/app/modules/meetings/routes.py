@@ -3,15 +3,20 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, status, UploadFile, File, Form, HTTPException, Body
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.database import get_db
 
 from app.core.websocket_manager import ws_connection_manager
 from app.modules.meetings.dependencies import get_current_user_id, get_optional_user_id, get_meetings_service
-from app.modules.meetings.controller import MeetingController
+from app.modules.meetings.controller import MeetingController, MeetingAIAnalysisController
+from app.modules.meetings.repository import MeetingAIAnalysisRepository
+from app.modules.meetings.ai_provider_service import AIProviderService
 from app.modules.meetings.schemas import (
     MeetingCreate, MeetingUpdate, MeetingResponse,
     MeetingParticipantResponse, MeetingJoinPayload,
     MeetingJoinInfoResponse, MeetingJoinResponse, RecordingResponse, TranscriptResponse,
-    WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse
+    WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse, AIAnalysisResponse, AIAnalysisStatusResponse, AIAnalysisPayloadSchema, AIAnalysisStatus
 )
 from app.modules.meetings.enums import ParticipantStatus
 from app.modules.meetings.constants import WSEvent
@@ -20,7 +25,12 @@ from app.modules.meetings.exceptions import (
     MeetingValidationError,
 )
 
+from app.modules.meetings.service import MeetingAIAnalysisService
+
 router = APIRouter(prefix="/meetings", tags=["Transactional Live Video Signaling Engine"])
+
+
+meeting_analysis_router = APIRouter(prefix="/meetings/{meeting_id}/analysis", tags=["Asynchronous Meeting AI Insights"])
 
 @router.post("", status_code=status.HTTP_201_CREATED, response_model=MeetingResponse)
 async def create_meeting_endpoint(
@@ -443,3 +453,29 @@ async def list_invitations_endpoint(
 ):
     ctrl = MeetingController(service)
     return await ctrl.list_invites(meeting_id)
+
+
+async def get_ai_analysis_service(db: AsyncSession = Depends(get_db)) -> MeetingAIAnalysisService:
+    repo = MeetingAIAnalysisRepository(db)
+    provider = AIProviderService()
+    # AI analysis service handles analysis only; completion emails are dispatched
+    # by MeetingCompletionService via the Celery completion pipeline.
+    return MeetingAIAnalysisService(repo, provider)
+
+@meeting_analysis_router.get("", status_code=status.HTTP_200_OK, response_model=AIAnalysisResponse)
+async def get_meeting_analysis_endpoint(
+    meeting_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service: MeetingAIAnalysisService = Depends(get_ai_analysis_service)
+):
+    ctrl = MeetingAIAnalysisController(service)
+    return await ctrl.get_completed_analysis(meeting_id)
+
+@meeting_analysis_router.get("/status", status_code=status.HTTP_200_OK, response_model=AIAnalysisStatusResponse)
+async def get_meeting_analysis_status_endpoint(
+    meeting_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service: MeetingAIAnalysisService = Depends(get_ai_analysis_service)
+):
+    ctrl = MeetingAIAnalysisController(service)
+    return await ctrl.get_tracking_status(meeting_id)

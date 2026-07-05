@@ -18,3 +18,4 @@ requests
 aiofiles
 python-multipart
 jinja2
+openai
