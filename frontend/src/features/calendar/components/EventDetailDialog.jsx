@@ -1,3 +1,4 @@
+import { useState } from "react"
 import {
     Dialog,
     DialogContent,
@@ -6,6 +7,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
 import { cn } from "@/lib/utils"
 import {
     fmtDisplayTime,
@@ -17,6 +19,13 @@ import { getEventFaintStyle, getEventColorHex } from "../utils/colorUtils"
 import { EVENT_TYPE_LABELS } from "../api/calendarTypes"
 import { MapPin, RefreshCw, Globe, Tag, CalendarDays, Edit2, Trash2 } from "lucide-react"
 import { dayjs } from "../utils/dateUtils"
+import { AttachmentPanelContainer } from "@/features/attachments/components/AttachmentPanel"
+import {
+    useCalendarEventAttachments,
+    useUploadCalendarEventAttachment,
+    useDeleteCalendarEventAttachment,
+} from "@/features/attachments/hooks/useAttachmentsApi"
+import { attachmentsApi } from "@/features/attachments/api/attachmentsApi"
 
 /**
  * @param {Object} props
@@ -27,6 +36,14 @@ import { dayjs } from "../utils/dateUtils"
  * @param {() => void} props.onDelete
  */
 export function EventDetailDialog({ open, event, onClose, onEdit, onDelete }) {
+    // Attachment hooks — always called, guarded by enabled:!!eventId inside each hook
+    const eventId = event?.id ?? null
+    const calendarAttachments = useCalendarEventAttachments(eventId)
+    const uploadCalendarAttachment = useUploadCalendarEventAttachment(eventId)
+    const deleteCalendarAttachment = useDeleteCalendarEventAttachment(eventId)
+
+    const [showAttachments, setShowAttachments] = useState(false)
+
     if (!event) return null
 
     const faint = getEventFaintStyle(event.color)
@@ -50,7 +67,8 @@ export function EventDetailDialog({ open, event, onClose, onEdit, onDelete }) {
 
     return (
         <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-            <DialogContent className="max-w-sm">
+            {/* Wider to accommodate attachment panel */}
+            <DialogContent className="max-w-md">
                 {/* Color accent strip */}
                 <div
                     className="h-1.5 -mx-4 -mt-4 mb-2"
@@ -113,6 +131,43 @@ export function EventDetailDialog({ open, event, onClose, onEdit, onDelete }) {
                     {event.description && (
                         <div className={cn("px-3 py-2.5 border text-xs leading-relaxed", faint)}>
                             {event.description}
+                        </div>
+                    )}
+                </div>
+
+                {/* ── Attachments ─────────────────────────────────────────── */}
+                <Separator />
+
+                <div>
+                    <button
+                        type="button"
+                        onClick={() => setShowAttachments((v) => !v)}
+                        className="flex w-full items-center justify-between py-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        aria-expanded={showAttachments}
+                        aria-controls="event-attachments"
+                    >
+                        <span className="text-xs font-medium text-foreground">Attachments</span>
+                        <span className="text-[10px] text-muted-foreground">
+                            {showAttachments ? "Hide" : "Show"}
+                        </span>
+                    </button>
+
+                    {showAttachments && (
+                        <div id="event-attachments" className="mt-2">
+                            <AttachmentPanelContainer
+                                attachments={calendarAttachments.data}
+                                isLoading={calendarAttachments.isLoading}
+                                isError={calendarAttachments.isError}
+                                uploadMutation={uploadCalendarAttachment}
+                                deleteMutation={deleteCalendarAttachment}
+                                downloadFn={async (attachmentId) => {
+                                    const { data } = await attachmentsApi.downloadForCalendarEvent(
+                                        eventId,
+                                        attachmentId,
+                                    )
+                                    return data
+                                }}
+                            />
                         </div>
                     )}
                 </div>

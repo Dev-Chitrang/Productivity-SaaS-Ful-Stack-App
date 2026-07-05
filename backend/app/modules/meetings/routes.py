@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 
 from app.core.websocket_manager import ws_connection_manager
-from app.modules.meetings.dependencies import get_current_user_id, get_optional_user_id, get_meetings_service
+from app.modules.meetings.dependencies import get_current_user_id, get_optional_user_id, get_meetings_service, get_attachment_service
 from app.modules.meetings.controller import MeetingController, MeetingAIAnalysisController, SessionHistoryController
 from app.modules.meetings.repository import MeetingAIAnalysisRepository
 from app.modules.meetings.ai_provider_service import AIProviderService
@@ -27,8 +27,15 @@ from app.modules.meetings.exceptions import (
     MeetingValidationError,
     SessionAccessDeniedException,
 )
-
 from app.modules.meetings.service import MeetingAIAnalysisService
+from app.modules.attachments.enums import AttachmentEntityType
+from app.modules.attachments.exceptions import (
+    AttachmentNotFoundException,
+    AttachmentStorageError,
+    AttachmentValidationError,
+)
+from app.modules.attachments.schemas import AttachmentListResponse, AttachmentResponse
+from app.modules.attachments.service import AttachmentService
 
 router = APIRouter(prefix="/meetings", tags=["Transactional Live Video Signaling Engine"])
 
@@ -651,3 +658,132 @@ async def get_session_analysis_status_endpoint(
 
     ctrl = MeetingAIAnalysisController(ai_service)
     return await ctrl.get_tracking_status(session_id)
+
+
+# ---------------------------------------------------------------------------
+# Session Attachment Routes — registered users only, scoped per session
+# ---------------------------------------------------------------------------
+
+async def _verify_session_access(
+    meeting_id: UUID,
+    session_id: UUID,
+    current_user_id: UUID,
+    meetings_service,
+) -> None:
+    """
+    Reuses the existing SessionAuthorizationService.
+    Raises 404 if meeting/session not found, 403 if access is denied.
+    Guests (user_id=None) are always denied — this layer requires a registered user.
+    """
+    try:
+        await meetings_service.get_meeting(meeting_id)
+    except MeetingNotFoundException as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    try:
+        await meetings_service.auth_service.verify_session_access(
+            session_id, current_user_id, meeting_id
+        )
+    except SessionAccessDeniedException as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+
+@router.post(
+    "/{meeting_id}/sessions/{session_id}/attachments",
+    status_code=status.HTTP_201_CREATED,
+    response_model=AttachmentResponse,
+    summary="Upload an attachment to a meeting session",
+)
+async def upload_session_attachment(
+    meeting_id: UUID,
+    session_id: UUID,
+    file: UploadFile = File(...),
+    current_user_id: UUID = Depends(get_current_user_id),
+    meetings_service = Depends(get_meetings_service),
+    attachment_service: AttachmentService = Depends(get_attachment_service),
+):
+    await _verify_session_access(meeting_id, session_id, current_user_id, meetings_service)
+    try:
+        attachment = await attachment_service.upload(
+            owner_user_id=current_user_id,
+            entity_type=AttachmentEntityType.MEETING_SESSION,
+            entity_id=session_id,
+            file=file,
+        )
+        return AttachmentResponse.model_validate(attachment)
+    except AttachmentValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except AttachmentStorageError as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+
+@router.get(
+    "/{meeting_id}/sessions/{session_id}/attachments",
+    status_code=status.HTTP_200_OK,
+    response_model=AttachmentListResponse,
+    summary="List all attachments for a meeting session",
+)
+async def list_session_attachments(
+    meeting_id: UUID,
+    session_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    meetings_service = Depends(get_meetings_service),
+    attachment_service: AttachmentService = Depends(get_attachment_service),
+):
+    await _verify_session_access(meeting_id, session_id, current_user_id, meetings_service)
+    attachments = await attachment_service.list_all_for_entity(
+        AttachmentEntityType.MEETING_SESSION, session_id
+    )
+    return AttachmentListResponse(
+        attachments=[AttachmentResponse.model_validate(a) for a in attachments],
+        total_count=len(attachments),
+    )
+
+
+@router.get(
+    "/{meeting_id}/sessions/{session_id}/attachments/{attachment_id}/download",
+    response_class=FileResponse,
+    summary="Download a meeting session attachment",
+)
+async def download_session_attachment(
+    meeting_id: UUID,
+    session_id: UUID,
+    attachment_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    meetings_service = Depends(get_meetings_service),
+    attachment_service: AttachmentService = Depends(get_attachment_service),
+):
+    await _verify_session_access(meeting_id, session_id, current_user_id, meetings_service)
+    try:
+        attachment = await attachment_service.get_for_download_verified(
+            attachment_id, AttachmentEntityType.MEETING_SESSION, session_id
+        )
+        return FileResponse(
+            path=attachment.storage_path,
+            media_type=attachment.content_type,
+            filename=attachment.original_filename,
+        )
+    except AttachmentNotFoundException:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found.")
+
+
+@router.delete(
+    "/{meeting_id}/sessions/{session_id}/attachments/{attachment_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete a meeting session attachment",
+)
+async def delete_session_attachment(
+    meeting_id: UUID,
+    session_id: UUID,
+    attachment_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    meetings_service = Depends(get_meetings_service),
+    attachment_service: AttachmentService = Depends(get_attachment_service),
+):
+    await _verify_session_access(meeting_id, session_id, current_user_id, meetings_service)
+    try:
+        await attachment_service.delete_verified(
+            attachment_id, AttachmentEntityType.MEETING_SESSION, session_id
+        )
+        return {"status": "success", "message": "Attachment deleted successfully."}
+    except AttachmentNotFoundException:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found.")

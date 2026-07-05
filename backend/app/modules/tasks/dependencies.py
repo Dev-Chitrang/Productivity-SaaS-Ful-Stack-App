@@ -6,8 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.storage import LocalStorageProvider, StorageService
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.services import TaskService
+from app.modules.attachments.repository import AttachmentRepository
+from app.modules.attachments.service import AttachmentService
 
 security_scheme = HTTPBearer()
 
@@ -24,9 +27,21 @@ def get_current_user_id(credentials: HTTPAuthorizationCredentials = Depends(secu
             detail="Could not validate credentials context signature."
         )
 
-async def get_tasks_service(db: AsyncSession = Depends(get_db)) -> TaskService:
+async def get_attachment_service(db: AsyncSession = Depends(get_db)) -> AttachmentService:
+    """
+    Assembles the AttachmentService scoped to the task module's storage base directory.
+    """
+    repo = AttachmentRepository(db)
+    provider = LocalStorageProvider(settings.attachment_storage)
+    storage = StorageService(provider)
+    return AttachmentService(repo, storage)
+
+async def get_tasks_service(
+    db: AsyncSession = Depends(get_db),
+    attachment_svc: AttachmentService = Depends(get_attachment_service),
+) -> TaskService:
     """
     Assembles a structurally isolated instance of the TaskService domain provider.
     """
     repo = TaskRepository(db)
-    return TaskService(repo)
+    return TaskService(repo, attachment_service=attachment_svc)

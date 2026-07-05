@@ -55,6 +55,10 @@ class Settings(BaseSettings):
     def transcribe_storage(self) -> str:
         return os.path.join(self.STORAGE_BASE_DIR, "transcribe")
 
+    @property
+    def attachment_storage(self) -> str:
+        return os.path.join(self.STORAGE_BASE_DIR, "attachments")
+
     @field_validator("ENVIRONMENT")
     @classmethod
     def validate_environment(cls, v: str) -> str:
