@@ -173,12 +173,18 @@ class AuthService:
     # ------------------------------------------------------------------
 
     async def login_step_one(self, email: str, plain_pwd: str) -> dict:
-        user = await self.repo.get_by_email(email)
+        user = await self.repo.get_by_email(email, include_inactive=True)
 
-        if not user or not user.password_hash or not SecurityEngine.verify_password(plain_pwd, user.password_hash):
-            raise PermissionError("Authentication match failed.")
+        if not user:
+            raise PermissionError("ACCOUNT_NOT_FOUND")
+        if not user.is_active:
+            raise PermissionError("ACCOUNT_INACTIVE")
+        if not user.password_hash:
+            raise PermissionError("OAUTH_ACCOUNT")
+        if not SecurityEngine.verify_password(plain_pwd, user.password_hash):
+            raise PermissionError("WRONG_PASSWORD")
         if not user.is_verified:
-            raise ValueError("Account configuration profiles unverified.")
+            raise ValueError("ACCOUNT_UNVERIFIED")
 
         if not user.is_2fa_enabled:
             tokens = SecurityEngine.generate_auth_tokens(str(user.id), user.email)

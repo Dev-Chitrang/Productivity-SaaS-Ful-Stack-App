@@ -1,4 +1,5 @@
 from uuid import UUID
+from typing import Optional
 
 class MeetingDomainException(Exception):
     """Base domain exception class for the meetings infrastructure module."""
@@ -18,6 +19,13 @@ class MeetingAccessDeniedException(MeetingDomainException):
         self.meeting_id = meeting_id
         self.user_id = user_id
         super().__init__(f"User ID '{user_id}' does not have host privileges for meeting '{meeting_id}'.")
+
+class SessionAccessDeniedException(MeetingDomainException):
+    """Raised when an unprivileged user attempts to access a session or its artifacts."""
+    def __init__(self, session_id: UUID, user_id: Optional[UUID] = None):
+        self.session_id = session_id
+        self.user_id = user_id
+        super().__init__(f"Access denied to session '{session_id}'.")
 
 class MeetingValidationError(MeetingDomainException):
     """Raised when meeting-state lifecycle actions (e.g., starting an ended meeting) fail."""

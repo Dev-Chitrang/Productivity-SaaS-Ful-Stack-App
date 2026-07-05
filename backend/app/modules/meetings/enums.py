@@ -23,6 +23,11 @@ class ParticipantStatus(str, Enum):
     REMOVED = "REMOVED"
     REJECTED = "REJECTED"
 
+class SessionStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    ENDED = "ENDED"
+    CANCELLED = "CANCELLED"
+
 class AIAnalysisStatus(str, Enum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"

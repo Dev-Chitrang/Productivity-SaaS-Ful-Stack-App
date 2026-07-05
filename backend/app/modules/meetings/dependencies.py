@@ -6,12 +6,15 @@ import jwt
 from uuid import UUID
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from redis.asyncio import Redis
 
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.storage import StorageService, LocalStorageProvider
-from app.modules.meetings.repository import MeetingRepository
-from app.modules.meetings.service import MeetingService
+from app.core.redis import get_redis_client
+from app.modules.meetings.repository import MeetingRepository, MeetingSessionRepository
+from app.modules.meetings.service import MeetingService, MeetingSessionService
+from app.modules.meetings.authorization import SessionAuthorizationService
 
 class WSCompatibleBearer(HTTPBearer):
     async def __call__(self, request: HTTPConnection):
@@ -63,9 +66,13 @@ def get_optional_user_id(credentials: Optional[HTTPAuthorizationCredentials] = D
 async def get_meetings_service(
     db: AsyncSession = Depends(get_db),
     storage: StorageService = Depends(get_storage_service),
+    redis: Redis = Depends(get_redis_client),
 ) -> MeetingService:
     """
     Assembles a structurally isolated instance of the MeetingService layer.
     """
     repo = MeetingRepository(db)
-    return MeetingService(repo, storage)
+    session_repo = MeetingSessionRepository(db)
+    session_service = MeetingSessionService(session_repo, redis, meeting_repo=repo)
+    auth_service = SessionAuthorizationService(repo, session_repo)
+    return MeetingService(repo, storage, session_service, auth_service)

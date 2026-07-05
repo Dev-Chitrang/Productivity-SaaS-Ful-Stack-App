@@ -462,3 +462,109 @@ export function useMeetingAnalysisStatus(meetingId) {
     retry: false,
   })
 }
+
+// ---------------------------------------------------------------------------
+// Session History hooks (Phase 5)
+// ---------------------------------------------------------------------------
+
+export const sessionKeys = {
+  all: (meetingId) => ["meetings", meetingId, "sessions"],
+  list: (meetingId) => [...sessionKeys.all(meetingId), "list"],
+  detail: (meetingId, sessionId) => [...sessionKeys.all(meetingId), sessionId],
+  recordings: (meetingId, sessionId) => [...sessionKeys.detail(meetingId, sessionId), "recordings"],
+  transcripts: (meetingId, sessionId) => [...sessionKeys.detail(meetingId, sessionId), "transcripts"],
+  analysis: (meetingId, sessionId) => [...sessionKeys.detail(meetingId, sessionId), "analysis"],
+  analysisStatus: (meetingId, sessionId) => [...sessionKeys.detail(meetingId, sessionId), "analysis", "status"],
+}
+
+export function useSessionHistory(meetingId) {
+  return useQuery({
+    queryKey: sessionKeys.list(meetingId),
+    queryFn: async () => {
+      const { data } = await meetingsApi.listSessions(meetingId)
+      return Array.isArray(data) ? data : []
+    },
+    enabled: !!meetingId,
+    staleTime: 30_000,
+  })
+}
+
+export function useSessionDetail(meetingId, sessionId) {
+  return useQuery({
+    queryKey: sessionKeys.detail(meetingId, sessionId),
+    queryFn: async () => {
+      const { data } = await meetingsApi.getSession(meetingId, sessionId)
+      return data
+    },
+    enabled: !!(meetingId && sessionId),
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
+export function useSessionRecordings(meetingId, sessionId, enabled = false) {
+  return useQuery({
+    queryKey: sessionKeys.recordings(meetingId, sessionId),
+    queryFn: async () => {
+      const { data } = await meetingsApi.listSessionRecordings(meetingId, sessionId)
+      return Array.isArray(data) ? data : []
+    },
+    enabled: !!(meetingId && sessionId && enabled),
+    staleTime: 30_000,
+  })
+}
+
+export function useSessionTranscripts(meetingId, sessionId, enabled = false) {
+  return useQuery({
+    queryKey: sessionKeys.transcripts(meetingId, sessionId),
+    queryFn: async () => {
+      const { data } = await meetingsApi.listSessionTranscripts(meetingId, sessionId)
+      return Array.isArray(data) ? data : []
+    },
+    enabled: !!(meetingId && sessionId && enabled),
+    staleTime: 30_000,
+  })
+}
+
+export function useSessionAnalysis(meetingId, sessionId, enabled = false) {
+  return useQuery({
+    queryKey: sessionKeys.analysis(meetingId, sessionId),
+    queryFn: async () => {
+      try {
+        const { data } = await meetingsApi.getSessionAnalysis(meetingId, sessionId)
+        return data
+      } catch (error) {
+        if (error?.response?.status === 404 || error?.response?.status === 400) return null
+        throw error
+      }
+    },
+    enabled: !!(meetingId && sessionId && enabled),
+    retry: false,
+    staleTime: 30_000,
+  })
+}
+
+export function useSessionAnalysisStatus(meetingId, sessionId, enabled = false) {
+  return useQuery({
+    queryKey: sessionKeys.analysisStatus(meetingId, sessionId),
+    queryFn: async () => {
+      try {
+        const { data } = await meetingsApi.getSessionAnalysisStatus(meetingId, sessionId)
+        return data
+      } catch (error) {
+        if (error?.response?.status === 404) return null
+        throw error
+      }
+    },
+    enabled: !!(meetingId && sessionId && enabled),
+    refetchInterval: (query) => {
+      const d = query.state.data
+      if (!d) return false
+      if (d.status === "PENDING") return 5000
+      if (d.status === "PROCESSING") return 3000
+      return false
+    },
+    staleTime: 0,
+    retry: false,
+  })
+}

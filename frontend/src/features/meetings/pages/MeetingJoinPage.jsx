@@ -39,7 +39,9 @@ function MeetingJoinPage() {
   const handleJoin = async (guestName, guestEmail) => {
     setJoinLoading(true)
     try {
-      const payload = guestName ? { guest_name: guestName, guest_email: guestEmail } : {}
+      const payload = {}
+      if (guestName) payload.guest_name = guestName
+      if (guestEmail) payload.guest_email = guestEmail
       await joinMeeting.mutateAsync({ id: meeting.id, ...payload })
       if (guestName) {
         saveGuestSession({ meetingId: meeting.id, guestName, guestEmail, participantId: null })

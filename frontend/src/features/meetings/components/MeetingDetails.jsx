@@ -7,6 +7,7 @@ import {
   MEETING_STATUS_DOTS,
   MEETING_TYPE_LABELS,
   MEETING_TYPE_CLASSES,
+  MeetingType,
 } from "../api/meetingTypes"
 import { ParticipantList } from "./ParticipantList"
 import {
@@ -16,6 +17,7 @@ import {
   Copy,
   Microphone,
   FileText,
+  Trash,
 } from "@phosphor-icons/react"
 import toast from "react-hot-toast"
 
@@ -27,6 +29,7 @@ export function MeetingDetails({
   onEnd,
   onCancel,
   onEdit,
+  onDelete,
 }) {
   const statusLabel = MEETING_STATUS_LABELS[meeting?.status] || ""
   const statusClass = MEETING_STATUS_CLASSES[meeting?.status] || ""
@@ -53,13 +56,23 @@ export function MeetingDetails({
       })
     : ""
 
+  const isScheduled = meeting?.meeting_type === MeetingType.SCHEDULED
   const isActive = meeting?.status === "ACTIVE"
   const isCreated = meeting?.status === "CREATED"
   const isIdle = meeting?.status === "IDLE"
   const isEnded = meeting?.status === "ENDED"
   const isCancelled = meeting?.status === "CANCELLED"
-  const canModify = isHost && (isCreated || isActive || isIdle)
-  const canEnd = isHost && (isActive || isIdle)
+  const status = meeting?.status
+
+  // INSTANT meeting actions
+  const showEndMeeting = isHost && isActive
+  const showCancelMeeting = isHost && isScheduled && (status === "SCHEDULED")
+  const showEditMeeting = isHost && isScheduled && (status === "SCHEDULED")
+  const showDeleteMeeting = isHost && (
+    (isScheduled && isEnded) ||
+    (!isScheduled && (isCreated || isIdle || isEnded)) ||
+    isCancelled
+  )
 
   return (
     <div className="space-y-6">
@@ -190,7 +203,7 @@ export function MeetingDetails({
               Copy Link
             </Button>
 
-            {canEnd && (
+            {showEndMeeting && (
               <Button
                 variant="destructive"
                 size="sm"
@@ -202,7 +215,19 @@ export function MeetingDetails({
               </Button>
             )}
 
-            {canModify && (
+            {showCancelMeeting && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                aria-label="Cancel meeting"
+              >
+                <Prohibit className="size-3.5" />
+                Cancel Meeting
+              </Button>
+            )}
+
+            {showEditMeeting && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -214,18 +239,17 @@ export function MeetingDetails({
               </Button>
             )}
 
-            {canModify && (
+            {showDeleteMeeting && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onCancel}
-                aria-label="Cancel meeting"
+                onClick={onDelete}
+                aria-label="Delete meeting"
               >
-                <Prohibit className="size-3.5" />
-                Cancel
+                <Trash className="size-3.5" />
+                Delete
               </Button>
             )}
-
           </div>
         </CardContent>
       </Card>

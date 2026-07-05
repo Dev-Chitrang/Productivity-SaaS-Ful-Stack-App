@@ -12,7 +12,7 @@ class StorageProvider(abc.ABC):
     @abc.abstractmethod
     async def save(
         self,
-        meeting_id: UUID,
+        session_id: UUID,
         subfolder: str,
         filename: str,
         content: bytes,
@@ -43,14 +43,14 @@ class LocalStorageProvider(StorageProvider):
 
     async def save(
         self,
-        meeting_id: UUID,
+        session_id: UUID,
         subfolder: str,
         filename: str,
         content: bytes,
         content_type: str,
     ) -> dict:
         folder = self._ensure_dir(
-            os.path.join(self.base_dir, str(meeting_id), subfolder)
+            os.path.join(self.base_dir, str(session_id), subfolder)
         )
         safe_filename = f"{os.urandom(4).hex()}_{filename}"
         dest = os.path.join(folder, safe_filename)
@@ -83,24 +83,24 @@ class StorageService:
 
     async def save_recording(
         self,
-        meeting_id: UUID,
+        session_id: UUID,
         filename: str,
         content: bytes,
         content_type: str,
     ) -> dict:
         return await self._provider.save(
-            meeting_id, "recordings", filename, content, content_type
+            session_id, "recordings", filename, content, content_type
         )
 
     async def save_transcript(
         self,
-        meeting_id: UUID,
+        session_id: UUID,
         filename: str,
         content: bytes,
         content_type: str,
     ) -> dict:
         return await self._provider.save(
-            meeting_id, "transcripts", filename, content, content_type
+            session_id, "transcripts", filename, content, content_type
         )
 
     async def delete_file(self, storage_path: str) -> bool:

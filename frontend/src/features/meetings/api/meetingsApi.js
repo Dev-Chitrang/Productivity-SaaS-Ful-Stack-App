@@ -73,4 +73,16 @@ export const meetingsApi = {
   getAnalysis: (meetingId) => api.get(`/meetings/${meetingId}/analysis`),
 
   getAnalysisStatus: (meetingId) => api.get(`/meetings/${meetingId}/analysis/status`),
+
+  // Session History (Phase 5)
+  listSessions: (meetingId) => api.get(`/meetings/${meetingId}/sessions`),
+  getSession: (meetingId, sessionId) => api.get(`/meetings/${meetingId}/sessions/${sessionId}`),
+  listSessionRecordings: (meetingId, sessionId) =>
+    api.get(`/meetings/${meetingId}/sessions/${sessionId}/recordings`),
+  listSessionTranscripts: (meetingId, sessionId) =>
+    api.get(`/meetings/${meetingId}/sessions/${sessionId}/transcripts`),
+  getSessionAnalysis: (meetingId, sessionId) =>
+    api.get(`/meetings/${meetingId}/sessions/${sessionId}/analysis`),
+  getSessionAnalysisStatus: (meetingId, sessionId) =>
+    api.get(`/meetings/${meetingId}/sessions/${sessionId}/analysis/status`),
 }

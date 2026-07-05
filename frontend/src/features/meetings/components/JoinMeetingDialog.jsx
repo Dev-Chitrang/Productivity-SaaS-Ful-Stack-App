@@ -18,16 +18,17 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { User, Envelope } from "@phosphor-icons/react"
 import { joinMeetingSchema } from "../schemas/meetingSchema"
 
 export function JoinMeetingDialog({ open, onOpenChange, onJoin, isPending }) {
   const form = useForm({
     resolver: zodResolver(joinMeetingSchema),
-    defaultValues: { guest_name: "" },
+    defaultValues: { guest_name: "", guest_email: "" },
   })
 
   const onSubmit = (values) => {
-    onJoin(values.guest_name)
+    onJoin(values.guest_name, values.guest_email)
   }
 
   return (
@@ -36,7 +37,7 @@ export function JoinMeetingDialog({ open, onOpenChange, onJoin, isPending }) {
         <DialogHeader>
           <DialogTitle>Join Meeting</DialogTitle>
           <DialogDescription>
-            Enter your name to join the meeting as a guest.
+            Enter your name and email to join the meeting as a guest.
           </DialogDescription>
         </DialogHeader>
 
@@ -49,12 +50,38 @@ export function JoinMeetingDialog({ open, onOpenChange, onJoin, isPending }) {
                 <FormItem>
                   <FormLabel>Your Name</FormLabel>
                   <FormControl>
-                    <Input
-                      placeholder="Enter your name"
-                      autoFocus
-                      aria-label="Your name"
-                      {...field}
-                    />
+                    <div className="relative">
+                      <User className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Enter your name"
+                        className="h-10 pl-9"
+                        autoFocus
+                        aria-label="Your name"
+                        {...field}
+                      />
+                    </div>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="guest_email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email Address</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                      <Envelope className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                      <Input
+                        type="email"
+                        placeholder="Enter your email"
+                        className="h-10 pl-9"
+                        aria-label="Email address"
+                        {...field}
+                      />
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>

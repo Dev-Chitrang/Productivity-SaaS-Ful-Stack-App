@@ -9,20 +9,23 @@ from app.core.database import get_db
 
 from app.core.websocket_manager import ws_connection_manager
 from app.modules.meetings.dependencies import get_current_user_id, get_optional_user_id, get_meetings_service
-from app.modules.meetings.controller import MeetingController, MeetingAIAnalysisController
+from app.modules.meetings.controller import MeetingController, MeetingAIAnalysisController, SessionHistoryController
 from app.modules.meetings.repository import MeetingAIAnalysisRepository
 from app.modules.meetings.ai_provider_service import AIProviderService
 from app.modules.meetings.schemas import (
     MeetingCreate, MeetingUpdate, MeetingResponse,
     MeetingParticipantResponse, MeetingJoinPayload,
     MeetingJoinInfoResponse, MeetingJoinResponse, RecordingResponse, TranscriptResponse,
-    WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse, AIAnalysisResponse, AIAnalysisStatusResponse, AIAnalysisPayloadSchema, AIAnalysisStatus
+    WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse, AIAnalysisResponse, AIAnalysisStatusResponse, AIAnalysisPayloadSchema, AIAnalysisStatus,
+    SessionHistoryItemResponse, SessionDetailResponse,
 )
 from app.modules.meetings.enums import ParticipantStatus
 from app.modules.meetings.constants import WSEvent
 from app.modules.meetings.exceptions import (
     MeetingNotFoundException,
+    MeetingAccessDeniedException,
     MeetingValidationError,
+    SessionAccessDeniedException,
 )
 
 from app.modules.meetings.service import MeetingAIAnalysisService
@@ -136,44 +139,49 @@ async def join_meeting_endpoint(
 @router.get("/{meeting_id}/participants", status_code=status.HTTP_200_OK, response_model=List[MeetingParticipantResponse])
 async def get_participants_endpoint(
     meeting_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.get_participants(meeting_id)
+    return await ctrl.get_participants(meeting_id, current_user_id)
 
 @router.post("/{meeting_id}/recordings", status_code=status.HTTP_201_CREATED, response_model=RecordingResponse)
 async def upload_meeting_recording_endpoint(
     meeting_id: UUID,
     file: UploadFile = File(...),
     duration: Optional[float] = Form(None),
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.upload_recording(meeting_id, file, duration)
+    return await ctrl.upload_recording(meeting_id, current_user_id, file, duration)
 
 @router.get("/{meeting_id}/recordings", status_code=status.HTTP_200_OK, response_model=List[RecordingResponse])
 async def list_meeting_recordings_endpoint(
     meeting_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.get_all_recordings(meeting_id)
+    return await ctrl.get_all_recordings(meeting_id, current_user_id)
 
 @router.get("/recordings/{recording_id}/download", response_class=FileResponse)
 async def download_recording_endpoint(
     recording_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.download_recording_file(recording_id)
+    return await ctrl.download_recording_file(recording_id, current_user_id)
 
 @router.delete("/recordings/{recording_id}", status_code=status.HTTP_200_OK)
 async def delete_recording_endpoint(
     recording_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.delete_recording(recording_id)
+    return await ctrl.delete_recording(recording_id, current_user_id)
 
 
 # --- TRANSCRIPTS HANDLING ---
@@ -183,34 +191,38 @@ async def upload_meeting_transcript_endpoint(
     meeting_id: UUID,
     file: UploadFile = File(...),
     content_type: str = Form("text/plain"),
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.upload_transcript(meeting_id, file, content_type)
+    return await ctrl.upload_transcript(meeting_id, current_user_id, file, content_type)
 
 @router.get("/{meeting_id}/transcripts", status_code=status.HTTP_200_OK, response_model=List[TranscriptResponse])
 async def list_meeting_transcripts_endpoint(
     meeting_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.get_all_transcripts(meeting_id)
+    return await ctrl.get_all_transcripts(meeting_id, current_user_id)
 
 @router.get("/transcripts/{transcript_id}/download", response_class=FileResponse)
 async def download_transcript_endpoint(
     transcript_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.download_transcript_file(transcript_id)
+    return await ctrl.download_transcript_file(transcript_id, current_user_id)
 
 @router.delete("/transcripts/{transcript_id}", status_code=status.HTTP_200_OK)
 async def delete_transcript_endpoint(
     transcript_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.delete_transcript(transcript_id)
+    return await ctrl.delete_transcript(transcript_id, current_user_id)
 
 @router.post("/{meeting_id}/participants/{participant_id}/admit", status_code=status.HTTP_200_OK)
 async def admit_participant_endpoint(
@@ -449,10 +461,11 @@ async def invite_participants_endpoint(
 @router.get("/{meeting_id}/invitations", status_code=status.HTTP_200_OK, response_model=List[InvitationResponse])
 async def list_invitations_endpoint(
     meeting_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_meetings_service)
 ):
     ctrl = MeetingController(service)
-    return await ctrl.list_invites(meeting_id)
+    return await ctrl.list_invites(meeting_id, current_user_id)
 
 
 async def get_ai_analysis_service(db: AsyncSession = Depends(get_db)) -> MeetingAIAnalysisService:
@@ -466,16 +479,175 @@ async def get_ai_analysis_service(db: AsyncSession = Depends(get_db)) -> Meeting
 async def get_meeting_analysis_endpoint(
     meeting_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
-    service: MeetingAIAnalysisService = Depends(get_ai_analysis_service)
+    service: MeetingAIAnalysisService = Depends(get_ai_analysis_service),
+    meetings_service = Depends(get_meetings_service)
 ):
     ctrl = MeetingAIAnalysisController(service)
-    return await ctrl.get_completed_analysis(meeting_id)
+    session = await meetings_service.session_service.get_active_session(meeting_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active session found for this meeting.")
+    try:
+        await meetings_service.auth_service.verify_session_access(session.id, current_user_id, meeting_id)
+    except SessionAccessDeniedException as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await ctrl.get_completed_analysis(session.id)
 
 @meeting_analysis_router.get("/status", status_code=status.HTTP_200_OK, response_model=AIAnalysisStatusResponse)
 async def get_meeting_analysis_status_endpoint(
     meeting_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
-    service: MeetingAIAnalysisService = Depends(get_ai_analysis_service)
+    service: MeetingAIAnalysisService = Depends(get_ai_analysis_service),
+    meetings_service = Depends(get_meetings_service)
 ):
     ctrl = MeetingAIAnalysisController(service)
-    return await ctrl.get_tracking_status(meeting_id)
+    session = await meetings_service.session_service.get_active_session(meeting_id)
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active session found for this meeting.")
+    try:
+        await meetings_service.auth_service.verify_session_access(session.id, current_user_id, meeting_id)
+    except SessionAccessDeniedException as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+    return await ctrl.get_tracking_status(session.id)
+
+
+# ---------------------------------------------------------------------------
+# Session History Routes (Phase 5) — registered users only, never guests
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/{meeting_id}/sessions",
+    status_code=status.HTTP_200_OK,
+    response_model=List[SessionHistoryItemResponse],
+    summary="List session history for a meeting",
+)
+async def list_meeting_sessions_endpoint(
+    meeting_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_meetings_service),
+):
+    ctrl = SessionHistoryController(service)
+    return await ctrl.list_sessions(meeting_id, current_user_id)
+
+
+@router.get(
+    "/{meeting_id}/sessions/{session_id}",
+    status_code=status.HTTP_200_OK,
+    response_model=SessionDetailResponse,
+    summary="Get a single session's details and artifact flags",
+)
+async def get_meeting_session_detail_endpoint(
+    meeting_id: UUID,
+    session_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_meetings_service),
+):
+    ctrl = SessionHistoryController(service)
+    return await ctrl.get_session_detail(meeting_id, session_id, current_user_id)
+
+
+@router.get(
+    "/{meeting_id}/sessions/{session_id}/recordings",
+    status_code=status.HTTP_200_OK,
+    response_model=List[RecordingResponse],
+    summary="List recordings for a specific session (lazy-loaded)",
+)
+async def list_session_recordings_endpoint(
+    meeting_id: UUID,
+    session_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_meetings_service),
+):
+    try:
+        meeting = await service.get_meeting(meeting_id)
+    except MeetingNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    try:
+        await service.auth_service.verify_session_access(session_id, current_user_id, meeting_id)
+    except SessionAccessDeniedException as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+    recordings = await service.repo.list_recordings_by_session(session_id)
+    from app.modules.meetings.schemas import RecordingResponse as _RR
+    return [_RR.model_validate(r) for r in recordings]
+
+
+@router.get(
+    "/{meeting_id}/sessions/{session_id}/transcripts",
+    status_code=status.HTTP_200_OK,
+    response_model=List[TranscriptResponse],
+    summary="List transcripts for a specific session (lazy-loaded)",
+)
+async def list_session_transcripts_endpoint(
+    meeting_id: UUID,
+    session_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_meetings_service),
+):
+    try:
+        await service.get_meeting(meeting_id)
+    except MeetingNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    try:
+        await service.auth_service.verify_session_access(session_id, current_user_id, meeting_id)
+    except SessionAccessDeniedException as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+    transcripts = await service.repo.list_transcripts_by_session(session_id)
+    from app.modules.meetings.schemas import TranscriptResponse as _TR
+    return [_TR.model_validate(t) for t in transcripts]
+
+
+@router.get(
+    "/{meeting_id}/sessions/{session_id}/analysis",
+    status_code=status.HTTP_200_OK,
+    response_model=AIAnalysisResponse,
+    summary="Get AI analysis for a specific session (lazy-loaded)",
+)
+async def get_session_analysis_endpoint(
+    meeting_id: UUID,
+    session_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_meetings_service),
+    ai_service: MeetingAIAnalysisService = Depends(get_ai_analysis_service),
+):
+    try:
+        await service.get_meeting(meeting_id)
+    except MeetingNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    try:
+        await service.auth_service.verify_session_access(session_id, current_user_id, meeting_id)
+    except SessionAccessDeniedException as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+    ctrl = MeetingAIAnalysisController(ai_service)
+    return await ctrl.get_completed_analysis(session_id)
+
+
+@router.get(
+    "/{meeting_id}/sessions/{session_id}/analysis/status",
+    status_code=status.HTTP_200_OK,
+    response_model=AIAnalysisStatusResponse,
+    summary="Get AI analysis status for a specific session (lazy-loaded)",
+)
+async def get_session_analysis_status_endpoint(
+    meeting_id: UUID,
+    session_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service = Depends(get_meetings_service),
+    ai_service: MeetingAIAnalysisService = Depends(get_ai_analysis_service),
+):
+    try:
+        await service.get_meeting(meeting_id)
+    except MeetingNotFoundException as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+    try:
+        await service.auth_service.verify_session_access(session_id, current_user_id, meeting_id)
+    except SessionAccessDeniedException as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+
+    ctrl = MeetingAIAnalysisController(ai_service)
+    return await ctrl.get_tracking_status(session_id)
