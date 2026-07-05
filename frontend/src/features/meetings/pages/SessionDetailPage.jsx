@@ -31,6 +31,13 @@ import {
 } from "@phosphor-icons/react"
 import toast from "react-hot-toast"
 import { meetingsApi } from "../api/meetingsApi"
+import { AttachmentPanelContainer } from "@/features/attachments/components/AttachmentPanel"
+import {
+    useSessionAttachments,
+    useUploadSessionAttachment,
+    useDeleteSessionAttachment,
+} from "@/features/attachments/hooks/useAttachmentsApi"
+import { attachmentsApi } from "@/features/attachments/api/attachmentsApi"
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -153,8 +160,8 @@ function ParticipantsSection({ participants, hostId }) {
                         {/* Avatar */}
                         <div
                             className={`flex size-6 shrink-0 items-center justify-center rounded-full ${isHost
-                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                                    : "bg-muted text-muted-foreground"
+                                ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                                : "bg-muted text-muted-foreground"
                                 }`}
                         >
                             <RoleIcon className="size-3.5" weight={isHost ? "fill" : "regular"} />
@@ -181,8 +188,8 @@ function ParticipantsSection({ participants, hostId }) {
                         {/* Attendance badge */}
                         <span
                             className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium shrink-0 ${attended
-                                    ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800"
-                                    : "bg-muted text-muted-foreground border-border"
+                                ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800"
+                                : "bg-muted text-muted-foreground border-border"
                                 }`}
                         >
                             {attended && <CheckCircle className="size-2.5" weight="fill" />}
@@ -525,16 +532,45 @@ function AIAnalysisArtifact({ meetingId, sessionId, hasAnalysis }) {
     )
 }
 
-// ─── Attachments Placeholder ──────────────────────────────────────────────────
+// ─── Attachments Artifact ────────────────────────────────────────────────────
 
-function AttachmentsPlaceholder() {
+function AttachmentsArtifact({ meetingId, sessionId, sessionAttachments, uploadMutation, deleteMutation }) {
+    const [open, setOpen] = useState(false)
+
     return (
-        <div className="flex items-center gap-2 py-3">
-            <Paperclip className="size-4 text-muted-foreground" />
-            <span className="text-xs font-medium text-muted-foreground">Attachments</span>
-            <span className="inline-flex items-center rounded border border-dashed border-border px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                Coming soon
-            </span>
+        <div>
+            <button
+                type="button"
+                onClick={() => setOpen((v) => !v)}
+                className="w-full flex items-center justify-between py-3 text-left"
+                aria-expanded={open}
+            >
+                <div className="flex items-center gap-2">
+                    <Paperclip className="size-4 text-muted-foreground" />
+                    <span className="text-xs font-medium">Attachments</span>
+                </div>
+                <span className="text-[10px] text-muted-foreground">{open ? "Hide" : "Show"}</span>
+            </button>
+
+            {open && (
+                <div className="pb-3">
+                    <AttachmentPanelContainer
+                        attachments={sessionAttachments.data}
+                        isLoading={sessionAttachments.isLoading}
+                        isError={sessionAttachments.isError}
+                        uploadMutation={uploadMutation}
+                        deleteMutation={deleteMutation}
+                        downloadFn={async (attachmentId) => {
+                            const { data } = await attachmentsApi.downloadForSession(
+                                meetingId,
+                                sessionId,
+                                attachmentId,
+                            )
+                            return data
+                        }}
+                    />
+                </div>
+            )}
         </div>
     )
 }
@@ -550,6 +586,11 @@ function SessionDetailPage() {
         meetingId,
         sessionId
     )
+
+    // Attachment hooks — called unconditionally at top level (Rules of Hooks)
+    const sessionAttachments = useSessionAttachments(meetingId, sessionId)
+    const uploadSessionAttachment = useUploadSessionAttachment(meetingId, sessionId)
+    const deleteSessionAttachment = useDeleteSessionAttachment(meetingId, sessionId)
 
     // Guests never reach this page
     if (!isAuthenticated) {
@@ -707,7 +748,15 @@ function SessionDetailPage() {
                         sessionId={sessionId}
                         hasAnalysis={artifacts.has_ai_analysis}
                     />
-                    <AttachmentsPlaceholder />
+
+                    {/* Attachments — collapsible, same pattern as other artifacts */}
+                    <AttachmentsArtifact
+                        meetingId={meetingId}
+                        sessionId={sessionId}
+                        sessionAttachments={sessionAttachments}
+                        uploadMutation={uploadSessionAttachment}
+                        deleteMutation={deleteSessionAttachment}
+                    />
                 </CardContent>
             </Card>
         </div>

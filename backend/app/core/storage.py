@@ -21,6 +21,21 @@ class StorageProvider(abc.ABC):
         ...
 
     @abc.abstractmethod
+    async def save_to_path(
+        self,
+        relative_dir: str,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict:
+        """
+        Generic save that accepts a caller-determined relative directory.
+        The provider resolves it against its base directory.
+        Returns {"storage_path": str, "size": int, "filename": str, "stored_filename": str}.
+        """
+        ...
+
+    @abc.abstractmethod
     async def delete(self, storage_path: str) -> bool:
         ...
 
@@ -64,6 +79,32 @@ class LocalStorageProvider(StorageProvider):
             "filename": filename,
         }
 
+    async def save_to_path(
+        self,
+        relative_dir: str,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict:
+        """
+        Generic save with a caller-supplied relative directory.
+        A random 8-hex-char prefix is prepended to the filename to avoid
+        collisions while preserving the original name in the stored value.
+        """
+        folder = self._ensure_dir(os.path.join(self.base_dir, relative_dir))
+        stored_filename = f"{os.urandom(4).hex()}_{filename}"
+        dest = os.path.join(folder, stored_filename)
+
+        async with aiofiles.open(dest, "wb") as f:
+            await f.write(content)
+
+        return {
+            "storage_path": dest,
+            "size": os.path.getsize(dest),
+            "filename": filename,
+            "stored_filename": stored_filename,
+        }
+
     async def delete(self, storage_path: str) -> bool:
         if os.path.exists(storage_path):
             os.remove(storage_path)
@@ -101,6 +142,26 @@ class StorageService:
     ) -> dict:
         return await self._provider.save(
             session_id, "transcripts", filename, content, content_type
+        )
+
+    async def save_attachment(
+        self,
+        entity_type_dir: str,
+        entity_id: str,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict:
+        """
+        Persists an attachment file under:
+            <base_dir>/<entity_type_dir>/<entity_id>/<stored_filename>
+
+        Returns the provider result dict including storage_path, size,
+        filename, and stored_filename.
+        """
+        relative_dir = os.path.join(entity_type_dir, entity_id)
+        return await self._provider.save_to_path(
+            relative_dir, filename, content, content_type
         )
 
     async def delete_file(self, storage_path: str) -> bool:

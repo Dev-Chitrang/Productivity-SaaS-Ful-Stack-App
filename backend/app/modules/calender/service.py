@@ -15,8 +15,9 @@ from app.modules.calender.exceptions import (
 
 
 class CalendarService:
-    def __init__(self, repo: CalendarRepository):
+    def __init__(self, repo: CalendarRepository, attachment_service=None):
         self.repo = repo
+        self._attachment_service = attachment_service
 
     # ------------------------------------------------------------------
     # CRUD
@@ -72,6 +73,12 @@ class CalendarService:
 
     async def delete_event(self, user_id: UUID, event_id: UUID) -> None:
         event = await self.get_event(user_id, event_id)
+        # Cascade: remove all attachments before soft-deleting the event
+        if self._attachment_service is not None:
+            from app.modules.attachments.enums import AttachmentEntityType
+            await self._attachment_service.delete_all_for_entity(
+                AttachmentEntityType.CALENDAR_EVENT, event_id
+            )
         await self.repo.soft_delete(event)
 
     # ------------------------------------------------------------------

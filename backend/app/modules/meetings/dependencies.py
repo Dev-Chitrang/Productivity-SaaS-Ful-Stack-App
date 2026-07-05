@@ -15,6 +15,8 @@ from app.core.redis import get_redis_client
 from app.modules.meetings.repository import MeetingRepository, MeetingSessionRepository
 from app.modules.meetings.service import MeetingService, MeetingSessionService
 from app.modules.meetings.authorization import SessionAuthorizationService
+from app.modules.attachments.repository import AttachmentRepository
+from app.modules.attachments.service import AttachmentService
 
 class WSCompatibleBearer(HTTPBearer):
     async def __call__(self, request: HTTPConnection):
@@ -76,3 +78,13 @@ async def get_meetings_service(
     session_service = MeetingSessionService(session_repo, redis, meeting_repo=repo)
     auth_service = SessionAuthorizationService(repo, session_repo)
     return MeetingService(repo, storage, session_service, auth_service)
+
+
+async def get_attachment_service(db: AsyncSession = Depends(get_db)) -> AttachmentService:
+    """
+    Assembles the AttachmentService scoped to the meetings module storage directory.
+    """
+    repo = AttachmentRepository(db)
+    provider = LocalStorageProvider(settings.attachment_storage)
+    storage = StorageService(provider)
+    return AttachmentService(repo, storage)

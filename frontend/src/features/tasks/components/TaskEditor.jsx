@@ -3,6 +3,13 @@ import { RichTextEditor, EditorToolbar, getEmptyDoc } from "@/shared/editor"
 import { Button } from "@/components/ui/button"
 import { TaskEditorSkeleton } from "./LoadingSkeleton"
 import { TaskActivityTimeline } from "./TaskActivityTimeline"
+import { AttachmentPanelContainer } from "@/features/attachments/components/AttachmentPanel"
+import {
+    useTaskAttachments,
+    useUploadTaskAttachment,
+    useDeleteTaskAttachment,
+} from "@/features/attachments/hooks/useAttachmentsApi"
+import { attachmentsApi } from "@/features/attachments/api/attachmentsApi"
 import {
     ArrowLeft, Plus, ListTodo, Pin, Star, Archive, Trash2, RotateCcw,
     Circle, X, Calendar, Save, AlertCircle,
@@ -45,6 +52,11 @@ export function TaskEditor({
         if (!task?.due_date) return false
         return checkIsOverdue(task.due_date)
     }, [task])
+
+    // ── Attachment hooks — must be called at top level, not inside JSX ──────
+    const taskAttachments = useTaskAttachments(task?.id ?? null)
+    const uploadTaskAttachment = useUploadTaskAttachment(task?.id ?? null)
+    const deleteTaskAttachment = useDeleteTaskAttachment(task?.id ?? null)
 
     const contentJson = useMemo(() => {
         if (isCreating) return getEmptyDoc()
@@ -472,6 +484,27 @@ export function TaskEditor({
             </div>
 
             <TaskActivityTimeline taskId={task?.id} />
+
+            {/* Attachments — only shown for persisted tasks */}
+            {task?.id && !isCreating && (
+                <div className="border-t border-border px-4 py-3">
+                    <p className="text-[11px] font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
+                        Attachments
+                    </p>
+                    <AttachmentPanelContainer
+                        attachments={taskAttachments.data}
+                        isLoading={taskAttachments.isLoading}
+                        isError={taskAttachments.isError}
+                        uploadMutation={uploadTaskAttachment}
+                        deleteMutation={deleteTaskAttachment}
+                        downloadFn={async (attachmentId) => {
+                            const { data } = await attachmentsApi.downloadForTask(task.id, attachmentId)
+                            return data
+                        }}
+                        readOnly={isDeleted}
+                    />
+                </div>
+            )}
         </div>
     )
 }
