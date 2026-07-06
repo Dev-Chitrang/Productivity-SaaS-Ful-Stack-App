@@ -22,6 +22,7 @@ from app.core.config import settings
 from app.core.logger import logger
 from app.workers.tasks import send_async_email
 from redis.asyncio import Redis
+from app.modules.entity_links.repository import EntityLinkRepository
 
 class MeetingService:
     def __init__(self, repo: MeetingRepository, storage: StorageService, session_service: MeetingSessionService, auth_service=None):
@@ -113,6 +114,9 @@ class MeetingService:
         if meeting.host_id != user_id:
             raise MeetingAccessDeniedException(meeting_id, user_id)
         await self.session_service.remove_live_state(meeting_id)
+        # Soft-delete associated entity links
+        el_repo = EntityLinkRepository(self.repo.db)
+        await el_repo.soft_delete_by_entity("meeting", meeting_id)
         await self.repo.soft_delete(meeting)
         return meeting
 
@@ -704,6 +708,21 @@ class MeetingAIAnalysisService:
                 suggested_tasks=parsed["suggested_tasks"],
                 raw_response=result["raw"]
             )
+
+            # Create normalized MeetingSuggestedTask records from JSON suggested_tasks
+            from app.modules.ai_suggestions.repository import AISuggestionRepository
+            ai_suggestion_repo = AISuggestionRepository(self.repo.db)
+            suggested_tasks = parsed.get("suggested_tasks", [])
+            if suggested_tasks:
+                records = []
+                for task_data in suggested_tasks:
+                    records.append({
+                        "analysis_id": analysis.id,
+                        "title": task_data.get("title", "Untitled"),
+                        "description": task_data.get("description", ""),
+                        "priority": task_data.get("priority", "MEDIUM"),
+                    })
+                await ai_suggestion_repo.bulk_create(records)
 
         except Exception as e:
             await self.repo.update_status(

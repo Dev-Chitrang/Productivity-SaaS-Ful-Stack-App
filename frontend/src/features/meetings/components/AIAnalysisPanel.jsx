@@ -1,10 +1,16 @@
-import { useEffect } from "react"
+import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { useQueryClient } from "@tanstack/react-query"
 import {
   useMeetingAnalysis,
   useMeetingAnalysisStatus,
   analysisKeys,
 } from "../hooks/useMeetingsApi"
+import {
+  useAiSuggestions,
+  useCreateTaskFromSuggestion,
+  useRejectSuggestion,
+} from "../hooks/useAiSuggestionsApi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -15,6 +21,9 @@ import {
   XCircle,
   ArrowClockwise,
   FileText,
+  ListChecks,
+  Check,
+  Prohibit,
 } from "@phosphor-icons/react"
 
 function PriorityBadge({ priority }) {
@@ -34,14 +43,42 @@ function PriorityBadge({ priority }) {
   )
 }
 
+function SuggestionStatusBadge({ status }) {
+  if (status === "CREATED") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-[10px] font-medium text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300">
+        <Check className="size-2.5" weight="bold" />
+        Created
+      </span>
+    )
+  }
+  if (status === "REJECTED") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+        <Prohibit className="size-2.5" weight="bold" />
+        Rejected
+      </span>
+    )
+  }
+  return null
+}
+
 export function AIAnalysisPanel({ meetingId, enabled }) {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [pendingSuggestionId, setPendingSuggestionId] = useState(null)
   const {
     data: analysis,
     isLoading: analysisLoading,
     isError,
   } = useMeetingAnalysis(meetingId)
   const { data: statusData } = useMeetingAnalysisStatus(meetingId)
+
+  const analysisId = analysis?.id
+  const { data: suggestions = [] } = useAiSuggestions(analysisId)
+
+  const createTaskMutation = useCreateTaskFromSuggestion()
+  const rejectMutation = useRejectSuggestion()
 
   const status = statusData?.status || analysis?.status
 
@@ -60,6 +97,29 @@ export function AIAnalysisPanel({ meetingId, enabled }) {
     queryClient.invalidateQueries({
       queryKey: analysisKeys.status(meetingId),
     })
+  }
+
+  const handleCreateTask = async (suggestion) => {
+    setPendingSuggestionId(suggestion.id)
+    try {
+      await createTaskMutation.mutateAsync({
+        suggestionId: suggestion.id,
+        analysisId,
+        payload: {},
+      })
+    } catch {}
+    setPendingSuggestionId(null)
+  }
+
+  const handleReject = async (suggestion) => {
+    setPendingSuggestionId(suggestion.id)
+    try {
+      await rejectMutation.mutateAsync({
+        suggestionId: suggestion.id,
+        analysisId,
+      })
+    } catch {}
+    setPendingSuggestionId(null)
   }
 
   if (!enabled) {
@@ -268,26 +328,67 @@ export function AIAnalysisPanel({ meetingId, enabled }) {
             </div>
           )}
 
-          {analysis.suggested_tasks?.length > 0 && (
+          {suggestions.length > 0 && (
             <div>
               <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Suggested Tasks
               </h4>
               <div className="space-y-2">
-                {analysis.suggested_tasks.map((task, i) => (
+                {suggestions.map((suggestion) => (
                   <div
-                    key={i}
+                    key={suggestion.id}
                     className="space-y-1.5 rounded border border-border p-3"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-xs font-medium">{task.title}</p>
-                      <PriorityBadge priority={task.priority} />
+                      <p className="text-xs font-medium">{suggestion.title}</p>
+                      <PriorityBadge priority={suggestion.priority} />
                     </div>
-                    {task.description && (
+                    {suggestion.description && (
                       <p className="text-xs text-muted-foreground">
-                        {task.description}
+                        {suggestion.description}
                       </p>
                     )}
+                    <div className="flex items-center gap-2 pt-1">
+                      {suggestion.status === "PENDING" ? (
+                        <>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-7 text-[11px]"
+                            onClick={() => handleCreateTask(suggestion)}
+                            disabled={pendingSuggestionId === suggestion.id}
+                          >
+                            <ListChecks className="size-3 mr-1" />
+                            {pendingSuggestionId === suggestion.id ? "Creating..." : "Create Task"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-[11px] text-muted-foreground"
+                            onClick={() => handleReject(suggestion)}
+                            disabled={pendingSuggestionId === suggestion.id}
+                          >
+                            <Prohibit className="size-3 mr-1" />
+                            Reject
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <SuggestionStatusBadge status={suggestion.status} />
+                          {suggestion.status === "CREATED" && suggestion.created_task_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-[11px]"
+                              onClick={() => navigate(`/tasks`)}
+                            >
+                              <ListChecks className="size-3 mr-1" />
+                              Open Task
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

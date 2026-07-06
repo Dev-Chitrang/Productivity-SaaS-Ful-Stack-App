@@ -10,13 +10,20 @@ import {
     useDeleteTaskAttachment,
 } from "@/features/attachments/hooks/useAttachmentsApi"
 import { attachmentsApi } from "@/features/attachments/api/attachmentsApi"
+import { LinkedMeetingsPanel } from "./LinkedMeetingsPanel"
 import {
-    ArrowLeft, Plus, ListTodo, Pin, Star, Archive, Trash2, RotateCcw,
-    Circle, X, Calendar, Save, AlertCircle,
+    ArrowLeft, Pencil, Plus, Pin, Star, Archive, Trash2, RotateCcw,
+    X, Calendar, Save, AlertCircle, History, Paperclip, Video, ListTodo,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { TaskStatus, TaskPriority, TaskStatusColors, TaskPriorityColors } from "../api/tasksTypes"
-import { generateChecklistId, isOverdue as checkIsOverdue } from "../utils/tasksUtils"
+import { isOverdue as checkIsOverdue } from "../utils/tasksUtils"
+
+const TABS = [
+    { id: "activity", label: "Activity", icon: History },
+    { id: "attachments", label: "Attachments", icon: Paperclip },
+    { id: "meetings", label: "Related Meetings", icon: Video },
+]
 
 export function TaskEditor({
     task,
@@ -33,16 +40,16 @@ export function TaskEditor({
     showBackButton,
     isSaving,
 }) {
+    const [isEditing, setIsEditing] = useState(false)
     const [title, setTitle] = useState("")
     const [status, setStatus] = useState("TODO")
     const [priority, setPriority] = useState("MEDIUM")
     const [dueDate, setDueDate] = useState("")
     const [newLabel, setNewLabel] = useState("")
     const [labels, setLabels] = useState([])
-    const [checklist, setChecklist] = useState([])
-    const [newChecklistItem, setNewChecklistItem] = useState("")
     const [editorInstance, setEditorInstance] = useState(null)
     const [descriptionContent, setDescriptionContent] = useState(null)
+    const [activeTab, setActiveTab] = useState("activity")
 
     const initialSnapshot = useRef(null)
     const prevTaskId = useRef(task?.id)
@@ -53,7 +60,6 @@ export function TaskEditor({
         return checkIsOverdue(task.due_date)
     }, [task])
 
-    // ── Attachment hooks — must be called at top level, not inside JSX ──────
     const taskAttachments = useTaskAttachments(task?.id ?? null)
     const uploadTaskAttachment = useUploadTaskAttachment(task?.id ?? null)
     const deleteTaskAttachment = useDeleteTaskAttachment(task?.id ?? null)
@@ -76,7 +82,6 @@ export function TaskEditor({
                 priority: task.priority || "MEDIUM",
                 dueDate: task.due_date ? task.due_date.slice(0, 10) : "",
                 labels: [...(task.labels || [])],
-                checklist: JSON.parse(JSON.stringify(task.checklist || [])),
                 description: task.description
                     ? JSON.parse(JSON.stringify(task.description))
                     : JSON.parse(JSON.stringify(getEmptyDoc())),
@@ -87,21 +92,23 @@ export function TaskEditor({
             setPriority(snapshot.priority)
             setDueDate(snapshot.dueDate)
             setLabels(snapshot.labels)
-            setChecklist(snapshot.checklist)
             setDescriptionContent(snapshot.description)
+            setIsEditing(false)
+            setActiveTab("activity")
             prevTaskId.current = task.id
-        } else if (isCreating && prevTaskId.current !== null) {
+        } else if (isCreating) {
             initialSnapshot.current = null
             setTitle("")
             setStatus("TODO")
             setPriority("MEDIUM")
             setDueDate("")
             setLabels([])
-            setChecklist([])
             setDescriptionContent(getEmptyDoc())
+            setIsEditing(true)
+            setActiveTab("activity")
             prevTaskId.current = null
         }
-    }, [task?.id, task?.title, task?.status, task?.priority, task?.due_date, task?.labels, task?.checklist, task?.description, isCreating])
+    }, [task?.id, task?.title, task?.status, task?.priority, task?.due_date, task?.labels, task?.description, isCreating])
 
     const isDirty = useMemo(() => {
         if (!initialSnapshot.current) return false
@@ -111,10 +118,9 @@ export function TaskEditor({
         if (priority !== init.priority) return true
         if (dueDate !== init.dueDate) return true
         if (JSON.stringify(labels) !== JSON.stringify(init.labels)) return true
-        if (JSON.stringify(checklist) !== JSON.stringify(init.checklist)) return true
         if (JSON.stringify(descriptionContent) !== JSON.stringify(init.description)) return true
         return false
-    }, [title, status, priority, dueDate, labels, checklist, descriptionContent])
+    }, [title, status, priority, dueDate, labels, descriptionContent])
 
     const canSave = isCreating || isDirty
 
@@ -128,56 +134,17 @@ export function TaskEditor({
         return () => window.removeEventListener("beforeunload", handler)
     }, [isDirty, isCreating])
 
-    const handleTitleChange = (e) => {
-        setTitle(e.target.value)
-    }
-
-    const handleStatusChange = (newStatus) => {
-        setStatus(newStatus)
-    }
-
-    const handlePriorityChange = (newPriority) => {
-        setPriority(newPriority)
-    }
-
-    const handleDueDateChange = (e) => {
-        setDueDate(e.target.value)
-    }
-
+    const handleTitleChange = (e) => setTitle(e.target.value)
+    const handleStatusChange = (newStatus) => setStatus(newStatus)
+    const handlePriorityChange = (newPriority) => setPriority(newPriority)
+    const handleDueDateChange = (e) => setDueDate(e.target.value)
     const handleAddLabel = () => {
         const trimmed = newLabel.trim().toLowerCase()
         if (!trimmed || labels.includes(trimmed)) return
         setLabels([...labels, trimmed])
         setNewLabel("")
     }
-
-    const handleRemoveLabel = (label) => {
-        setLabels(labels.filter((l) => l !== label))
-    }
-
-    const handleAddChecklistItem = () => {
-        const trimmed = newChecklistItem.trim()
-        if (!trimmed) return
-        const newItem = { id: generateChecklistId(), text: trimmed, completed: false }
-        setChecklist([...checklist, newItem])
-        setNewChecklistItem("")
-    }
-
-    const handleToggleChecklistItem = (id) => {
-        setChecklist(checklist.map((item) =>
-            item.id === id ? { ...item, completed: !item.completed } : item,
-        ))
-    }
-
-    const handleEditChecklistItem = (id, text) => {
-        setChecklist(checklist.map((item) =>
-            item.id === id ? { ...item, text } : item,
-        ))
-    }
-
-    const handleDeleteChecklistItem = (id) => {
-        setChecklist(checklist.filter((item) => item.id !== id))
-    }
+    const handleRemoveLabel = (label) => setLabels(labels.filter((l) => l !== label))
 
     const handleSaveClick = () => {
         if (!canSave || isSaving) return
@@ -188,29 +155,37 @@ export function TaskEditor({
             priority,
             due_date: dueDate || null,
             labels,
-            checklist,
         })
     }
+
+    const handleCancel = () => {
+        if (isCreating) {
+            onBack?.()
+            return
+        }
+        const init = initialSnapshot.current
+        if (init) {
+            setTitle(init.title)
+            setStatus(init.status)
+            setPriority(init.priority)
+            setDueDate(init.dueDate)
+            setLabels([...init.labels])
+            setDescriptionContent(JSON.parse(JSON.stringify(init.description)))
+        }
+        setIsEditing(false)
+    }
+
+    const handleStartEditing = () => setIsEditing(true)
 
     const handleTogglePin = () => {
         if (task) onTogglePin?.({ id: task.id, currentlyPinned: task.is_pinned })
     }
-
     const handleToggleFavorite = () => {
         if (task) onToggleFavorite?.({ id: task.id, currentlyFavorited: task.is_favorite })
     }
-
-    const handleArchive = () => {
-        if (task) onArchive?.(task)
-    }
-
-    const handleDelete = () => {
-        if (task) onDelete?.(task)
-    }
-
-    const handleRestore = () => {
-        if (task) onRestore?.(task)
-    }
+    const handleArchive = () => { if (task) onArchive?.(task) }
+    const handleDelete = () => { if (task) onDelete?.(task) }
+    const handleRestore = () => { if (task) onRestore?.(task) }
 
     if (!isCreating && !task && !isLoading) {
         return (
@@ -232,9 +207,185 @@ export function TaskEditor({
 
     if (isLoading) return <TaskEditorSkeleton />
 
+    // ──── Sub-renders ────
+
+    const renderMetadataDisplay = () => (
+        <div className="space-y-4">
+            <div>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Status</p>
+                <span className={cn(
+                    "inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-sm",
+                    TaskStatusColors[status],
+                )}>
+                    {status === "IN PROGRESS" ? "In Progress" : status.charAt(0) + status.slice(1).toLowerCase()}
+                </span>
+            </div>
+            <div>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Priority</p>
+                <span className={cn(
+                    "inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-sm",
+                    TaskPriorityColors[priority],
+                )}>
+                    {priority.charAt(0) + priority.slice(1).toLowerCase()}
+                </span>
+            </div>
+            <div>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Due Date</p>
+                <div className="flex items-center gap-1.5">
+                    {dueDate ? (
+                        <>
+                            <Calendar className="size-3 text-muted-foreground shrink-0" />
+                            <span className="text-xs text-foreground">{dueDate}</span>
+                            {checkIsOverdue(dueDate) && (
+                                <span className="text-[10px] text-red-500 font-medium">Overdue</span>
+                            )}
+                        </>
+                    ) : (
+                        <span className="text-xs text-muted-foreground/60 italic">None set</span>
+                    )}
+                </div>
+            </div>
+            <div>
+                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">Tags</p>
+                {labels.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                        {labels.map((label) => (
+                            <span key={label} className="inline-flex items-center px-1.5 py-0.5 bg-muted text-[10px] text-muted-foreground rounded-sm">
+                                {label}
+                            </span>
+                        ))}
+                    </div>
+                ) : (
+                    <span className="text-xs text-muted-foreground/60 italic">No tags</span>
+                )}
+            </div>
+        </div>
+    )
+
+    const renderEditableMetadata = () => (
+        <div className="space-y-3">
+            <div>
+                <p className="text-[10px] font-medium text-muted-foreground mb-1">Status</p>
+                <div className="flex items-center gap-1 flex-wrap">
+                    {Object.values(TaskStatus).map((s) => (
+                        <button
+                            key={s}
+                            type="button"
+                            onClick={() => handleStatusChange(s)}
+                            className={cn(
+                                "px-2 py-1 text-[11px] font-medium rounded-sm border transition-colors",
+                                status === s
+                                    ? TaskStatusColors[s] + " border-current"
+                                    : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
+                            )}
+                        >
+                            {s === "IN PROGRESS" ? "In Progress" : s.charAt(0) + s.slice(1).toLowerCase()}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <div>
+                <p className="text-[10px] font-medium text-muted-foreground mb-1">Priority</p>
+                <div className="flex items-center gap-1 flex-wrap">
+                    {Object.values(TaskPriority).map((p) => (
+                        <button
+                            key={p}
+                            type="button"
+                            onClick={() => handlePriorityChange(p)}
+                            className={cn(
+                                "px-2 py-1 text-[11px] font-medium rounded-sm border transition-colors",
+                                priority === p
+                                    ? TaskPriorityColors[p] + " border-current"
+                                    : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
+                            )}
+                        >
+                            {p.charAt(0) + p.slice(1).toLowerCase()}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <div>
+                <p className="text-[10px] font-medium text-muted-foreground mb-1">Due Date</p>
+                <div className="flex items-center gap-2">
+                    <Calendar className="size-3.5 text-muted-foreground shrink-0" />
+                    <input
+                        type="date"
+                        value={dueDate}
+                        onChange={handleDueDateChange}
+                        className="h-7 px-2 bg-muted border border-border text-[11px] text-foreground outline-none focus-visible:border-ring"
+                    />
+                    {dueDate && checkIsOverdue(dueDate) && (
+                        <span className="text-[10px] text-red-500 font-medium">Overdue</span>
+                    )}
+                </div>
+            </div>
+            <div>
+                <p className="text-[10px] font-medium text-muted-foreground mb-1">Tags</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                    {labels.map((label) => (
+                        <span key={label} className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-muted text-[10px] text-muted-foreground rounded-sm">
+                            {label}
+                            <button type="button" onClick={() => handleRemoveLabel(label)} className="hover:text-foreground">
+                                <X className="size-2.5" />
+                            </button>
+                        </span>
+                    ))}
+                    <div className="flex items-center gap-1">
+                        <input
+                            type="text"
+                            value={newLabel}
+                            onChange={(e) => setNewLabel(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && handleAddLabel()}
+                            placeholder="Add tag…"
+                            className="h-6 px-2 bg-muted border border-border text-[11px] text-foreground placeholder:text-muted-foreground outline-none focus-visible:border-ring w-20"
+                        />
+                        {newLabel && (
+                            <Button variant="ghost" size="icon-xs" onClick={handleAddLabel}>
+                                <Plus className="size-3" />
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </div>
+    )
+
+    const renderTabContent = () => {
+        switch (activeTab) {
+            case "activity":
+                return <TaskActivityTimeline taskId={task?.id} />
+            case "attachments":
+                return task?.id ? (
+                    <div className="py-3">
+                        <AttachmentPanelContainer
+                            attachments={taskAttachments.data}
+                            isLoading={taskAttachments.isLoading}
+                            isError={taskAttachments.isError}
+                            uploadMutation={uploadTaskAttachment}
+                            deleteMutation={deleteTaskAttachment}
+                            downloadFn={async (attachmentId) => {
+                                const { data } = await attachmentsApi.downloadForTask(task.id, attachmentId)
+                                return data
+                            }}
+                            readOnly={isDeleted}
+                        />
+                    </div>
+                ) : null
+            case "meetings":
+                return task?.id ? <LinkedMeetingsPanel taskId={task.id} /> : null
+            default:
+                return null
+        }
+    }
+
+    const showTabs = !isEditing && !isCreating && task?.id
+    const showEditButton = !isEditing && !isCreating && !isDeleted
+    const showActionButtons = !isDeleted && !isEditing && !isCreating
+
     return (
-        <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between px-4 py-2 border-b border-border gap-2">
+        <div className="flex flex-col">
+            {/*** Header ***/}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-border gap-2 sticky top-0 bg-background z-10">
                 <div className="flex items-center gap-2 min-w-0">
                     {showBackButton && (
                         <Button variant="ghost" size="icon-xs" onClick={onBack} aria-label="Back to list">
@@ -249,260 +400,139 @@ export function TaskEditor({
                     )}
                 </div>
                 <div className="flex items-center gap-2">
-                    {task && !isCreating && !isDeleted && (
+                    {showEditButton && (
+                        <Button variant="ghost" size="icon-xs" onClick={handleStartEditing} title="Edit task">
+                            <Pencil className="size-3.5" />
+                        </Button>
+                    )}
+                    {showActionButtons && (
                         <>
-                            <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={handleTogglePin}
-                                className={task.is_pinned ? "text-amber-600" : ""}
-                                title={task.is_pinned ? "Unpin" : "Pin"}
-                            >
+                            <Button variant="ghost" size="icon-xs" onClick={handleTogglePin} className={task.is_pinned ? "text-amber-600" : ""} title={task.is_pinned ? "Unpin" : "Pin"}>
                                 <Pin className="size-3.5" />
                             </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={handleToggleFavorite}
-                                className={task.is_favorite ? "text-amber-500" : ""}
-                                title={task.is_favorite ? "Remove from favorites" : "Add to favorites"}
-                            >
+                            <Button variant="ghost" size="icon-xs" onClick={handleToggleFavorite} className={task.is_favorite ? "text-amber-500" : ""} title={task.is_favorite ? "Remove from favorites" : "Add to favorites"}>
                                 <Star className="size-3.5" />
                             </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={handleArchive}
-                                title={task.is_archived ? "Unarchive" : "Archive"}
-                            >
+                            <Button variant="ghost" size="icon-xs" onClick={handleArchive} title={task.is_archived ? "Unarchive" : "Archive"}>
                                 <Archive className="size-3.5" />
                             </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                onClick={handleDelete}
-                                className="text-destructive hover:text-destructive"
-                                title="Delete"
-                            >
+                            <Button variant="ghost" size="icon-xs" onClick={handleDelete} className="text-destructive hover:text-destructive" title="Delete">
                                 <Trash2 className="size-3.5" />
                             </Button>
                         </>
                     )}
-                    {task && !isCreating && isDeleted && (
-                        <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            onClick={handleRestore}
-                            className="text-green-600 hover:text-green-700"
-                            title="Restore"
-                        >
+                    {isDeleted && (
+                        <Button variant="ghost" size="icon-xs" onClick={handleRestore} className="text-green-600 hover:text-green-700" title="Restore">
                             <RotateCcw className="size-3.5" />
                         </Button>
                     )}
-                    {!isDeleted && (
-                        <Button
-                            size="sm"
-                            onClick={handleSaveClick}
-                            disabled={!canSave || isSaving}
-                        >
-                            <Save className="size-3.5 mr-1" />
-                            {isSaving ? "Saving…" : isCreating ? "Create" : "Save"}
-                        </Button>
-                    )}
-                </div>
-            </div>
-
-            <div className="px-4 pt-3 pb-2 border-b border-border space-y-3">
-                <input
-                    type="text"
-                    value={title}
-                    onChange={handleTitleChange}
-                    placeholder="Task title…"
-                    className="w-full bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none border-none p-0"
-                    aria-label="Task title"
-                />
-
-                <div className="flex items-center gap-2 flex-wrap">
-                    <div className="flex items-center gap-1">
-                        {Object.values(TaskStatus).map((s) => (
-                            <button
-                                key={s}
-                                type="button"
-                                onClick={() => handleStatusChange(s)}
-                                className={cn(
-                                    "px-2 py-1 text-[11px] font-medium rounded-sm border transition-colors",
-                                    status === s
-                                        ? TaskStatusColors[s] + " border-current"
-                                        : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
-                                )}
-                                aria-label={`Status: ${s}`}
-                            >
-                                {s === "IN PROGRESS" ? "In Progress" : s.charAt(0) + s.slice(1).toLowerCase()}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                        {Object.values(TaskPriority).map((p) => (
-                            <button
-                                key={p}
-                                type="button"
-                                onClick={() => handlePriorityChange(p)}
-                                className={cn(
-                                    "px-2 py-1 text-[11px] font-medium rounded-sm border transition-colors",
-                                    priority === p
-                                        ? TaskPriorityColors[p] + " border-current"
-                                        : "border-border text-muted-foreground hover:text-foreground hover:bg-muted",
-                                )}
-                                aria-label={`Priority: ${p}`}
-                            >
-                                {p.charAt(0) + p.slice(1).toLowerCase()}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <Calendar className="size-3.5 text-muted-foreground shrink-0" />
-                    <input
-                        type="date"
-                        value={dueDate}
-                        onChange={handleDueDateChange}
-                        className="h-7 px-2 bg-muted border border-border text-[11px] text-foreground outline-none focus-visible:border-ring"
-                        aria-label="Due date"
-                    />
-                    {dueDate && checkIsOverdue(dueDate) && (
-                        <span className="text-[10px] text-red-500 font-medium">Overdue</span>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                    {labels.map((label) => (
-                        <span
-                            key={label}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-muted text-[10px] text-muted-foreground rounded-sm"
-                        >
-                            {label}
-                            <button
-                                type="button"
-                                onClick={() => handleRemoveLabel(label)}
-                                className="hover:text-foreground"
-                                aria-label={`Remove label ${label}`}
-                            >
-                                <X className="size-2.5" />
-                            </button>
-                        </span>
-                    ))}
-                    <div className="flex items-center gap-1">
-                        <input
-                            type="text"
-                            value={newLabel}
-                            onChange={(e) => setNewLabel(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleAddLabel()}
-                            placeholder="Add label…"
-                            className="h-6 px-2 bg-muted border border-border text-[11px] text-foreground placeholder:text-muted-foreground outline-none focus-visible:border-ring w-20"
-                            aria-label="Add label"
-                        />
-                        {newLabel && (
-                            <Button variant="ghost" size="icon-xs" onClick={handleAddLabel}>
-                                <Plus className="size-3" />
+                    {(isEditing || isCreating) && (
+                        <>
+                            <Button variant="ghost" size="sm" onClick={handleCancel} disabled={isSaving}>
+                                <X className="size-3.5 mr-1" />
+                                Cancel
                             </Button>
-                        )}
-                    </div>
+                            <Button size="sm" onClick={handleSaveClick} disabled={!canSave || isSaving}>
+                                <Save className="size-3.5 mr-1" />
+                                {isSaving ? "Saving\u2026" : isCreating ? "Create" : "Save"}
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
 
-            <EditorToolbar editor={editorInstance} />
-
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-                <RichTextEditor
-                    content={contentJson}
-                    onUpdate={handleEditorUpdate}
-                    editorRef={setEditorInstance}
-                    editable={!isDeleted}
-                    placeholder="Add description…"
-                    editorClassName="h-full"
-                />
-            </div>
-
-            <div className="border-t border-border px-4 py-3">
-                <p className="text-[11px] font-medium text-muted-foreground mb-2">Checklist</p>
-                <div className="space-y-1">
-                    {checklist.map((item) => (
-                        <div key={item.id} className="flex items-center gap-2 group">
-                            <button
-                                type="button"
-                                onClick={() => handleToggleChecklistItem(item.id)}
-                                className={cn(
-                                    "size-4 shrink-0 rounded-sm border flex items-center justify-center transition-colors",
-                                    item.completed
-                                        ? "bg-primary border-primary text-primary-foreground"
-                                        : "border-border hover:border-muted-foreground",
-                                )}
-                                aria-label={item.completed ? "Mark as incomplete" : "Mark as complete"}
-                            >
-                                {item.completed && <Circle className="size-2.5 fill-current" />}
-                            </button>
+            {/*** Edit / Create Mode ***/}
+            {(isEditing || isCreating) ? (
+                <div>
+                    {!isCreating && (
+                        <div className="px-4 pt-3 pb-2 border-b border-border">
                             <input
                                 type="text"
-                                value={item.text}
-                                onChange={(e) => handleEditChecklistItem(item.id, e.target.value)}
-                                className={cn(
-                                    "flex-1 bg-transparent text-[11px] text-foreground outline-none border-none p-0",
-                                    item.completed && "line-through text-muted-foreground",
-                                )}
-                                aria-label="Checklist item"
+                                value={title}
+                                onChange={handleTitleChange}
+                                placeholder="Task title\u2026"
+                                className="w-full bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none border-none p-0"
                             />
-                            <button
-                                type="button"
-                                onClick={() => handleDeleteChecklistItem(item.id)}
-                                className="opacity-0 group-hover:opacity-100 p-0.5 text-muted-foreground hover:text-destructive transition-opacity"
-                                aria-label="Delete checklist item"
-                            >
-                                <X className="size-3" />
-                            </button>
                         </div>
-                    ))}
-                    <div className="flex items-center gap-2">
-                        <div className="size-4 shrink-0" />
-                        <input
-                            type="text"
-                            value={newChecklistItem}
-                            onChange={(e) => setNewChecklistItem(e.target.value)}
-                            onKeyDown={(e) => e.key === "Enter" && handleAddChecklistItem()}
-                            placeholder="Add checklist item…"
-                            className="flex-1 bg-transparent text-[11px] text-muted-foreground placeholder:text-muted-foreground outline-none border-none p-0"
-                            aria-label="Add checklist item"
+                    )}
+                    {isCreating && (
+                        <div className="px-4 pt-3 pb-2 border-b border-border">
+                            <input
+                                type="text"
+                                value={title}
+                                onChange={handleTitleChange}
+                                placeholder="Task title\u2026"
+                                className="w-full bg-transparent text-sm font-medium text-foreground placeholder:text-muted-foreground outline-none border-none p-0"
+                                autoFocus
+                            />
+                        </div>
+                    )}
+                    <div className="px-4 py-3 space-y-4">
+                        {renderEditableMetadata()}
+                    </div>
+                    <EditorToolbar editor={editorInstance} />
+                    <div className="px-4 py-3">
+                        <RichTextEditor
+                            content={descriptionContent}
+                            onUpdate={handleEditorUpdate}
+                            editorRef={setEditorInstance}
+                            editable={!isDeleted}
+                            placeholder="Add description\u2026"
+                            editorClassName="[&_.ProseMirror]:!min-h-0"
                         />
-                        {newChecklistItem && (
-                            <Button variant="ghost" size="icon-xs" onClick={handleAddChecklistItem}>
-                                <Plus className="size-3" />
-                            </Button>
-                        )}
                     </div>
                 </div>
-            </div>
+            ) : (
+                /*** Normal Mode ***/ 
+                <div>
+                    {/* Title */}
+                    <div className="px-4 pt-3 pb-2 border-b border-border">
+                        <h2 className="text-sm font-medium text-foreground">{task?.title || title}</h2>
+                    </div>
 
-            <TaskActivityTimeline taskId={task?.id} />
+                    {/* Description + Sidebar */}
+                    <div className="lg:grid lg:grid-cols-[1fr_220px]">
+                        <div className="min-w-0 px-4 py-3">
+                            <RichTextEditor
+                                content={contentJson}
+                                onUpdate={handleEditorUpdate}
+                                editorRef={setEditorInstance}
+                                editable={false}
+                                placeholder="Add description\u2026"
+                                editorClassName="[&_.ProseMirror]:!min-h-0 [&_.ProseMirror]:cursor-default"
+                            />
+                        </div>
+                        <div className="border-t lg:border-t-0 lg:border-l border-border px-4 py-3">
+                            {renderMetadataDisplay()}
+                        </div>
+                    </div>
 
-            {/* Attachments — only shown for persisted tasks */}
-            {task?.id && !isCreating && (
-                <div className="border-t border-border px-4 py-3">
-                    <p className="text-[11px] font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
-                        Attachments
-                    </p>
-                    <AttachmentPanelContainer
-                        attachments={taskAttachments.data}
-                        isLoading={taskAttachments.isLoading}
-                        isError={taskAttachments.isError}
-                        uploadMutation={uploadTaskAttachment}
-                        deleteMutation={deleteTaskAttachment}
-                        downloadFn={async (attachmentId) => {
-                            const { data } = await attachmentsApi.downloadForTask(task.id, attachmentId)
-                            return data
-                        }}
-                        readOnly={isDeleted}
-                    />
+                    {/* Tabs */}
+                    {showTabs && (
+                        <div className="border-t border-border">
+                            <div className="flex border-b border-border overflow-x-auto">
+                                {TABS.map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        type="button"
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={cn(
+                                            "flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium whitespace-nowrap border-b-2 transition-colors -mb-px",
+                                            activeTab === tab.id
+                                                ? "border-primary text-foreground"
+                                                : "border-transparent text-muted-foreground hover:text-foreground",
+                                        )}
+                                    >
+                                        <tab.icon className="size-3" />
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div>
+                                {renderTabContent()}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

@@ -52,13 +52,17 @@ function MeetingDetailPage() {
   const handleEnd = async () => {
     try {
       await endMeeting.mutateAsync(id)
-    } catch { }
+    } catch {
+      // error handled by hook
+    }
   }
 
   const handleCancel = async () => {
     try {
       await cancelMeeting.mutateAsync(id)
-    } catch { }
+    } catch {
+      // error handled by hook
+    }
   }
 
   const handleDelete = async () => {
@@ -66,7 +70,9 @@ function MeetingDetailPage() {
       try {
         await deleteMeeting.mutateAsync(id)
         navigate("/meetings")
-      } catch { }
+      } catch {
+        // error handled by hook
+      }
     }
   }
 
