@@ -44,6 +44,9 @@ class MeetingResponse(MeetingBase):
     meeting_code: str
     meeting_link: str
     status: MeetingStatus
+    meeting_type: MeetingType = MeetingType.INSTANT
+    scheduled_start: Optional[datetime] = None
+    timezone: Optional[str] = None
     active_screen_sharer_id: Optional[UUID] = None
     invited_participants_count: int = 0
     created_at: datetime
@@ -201,6 +204,19 @@ class AIAnalysisResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class RecentAIAnalysisItem(BaseModel):
+    id: UUID
+    session_id: UUID
+    meeting_id: UUID
+    meeting_title: str
+    session_date: datetime
+    status: AIAnalysisStatus
+    summary: Optional[str] = None
+    agenda_coverage_percentage: Optional[int] = None
+    processing_completed_at: Optional[datetime] = None
+    created_at: datetime
+
 
 class AIAnalysisStatusResponse(BaseModel):
     session_id: UUID

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import FileResponse
 
 from app.modules.attachments.controller import AttachmentController
@@ -38,6 +38,21 @@ async def upload_attachment_endpoint(
         entity_id=entity_id,
         file=file,
     )
+
+
+@router.get(
+    "/recent",
+    status_code=status.HTTP_200_OK,
+    response_model=AttachmentListResponse,
+    summary="List the most recent attachments for the current user",
+)
+async def list_recent_attachments_endpoint(
+    limit: int = Query(10, ge=1, le=50),
+    current_user_id: UUID = Depends(get_current_user_id),
+    service: AttachmentService = Depends(get_attachment_service),
+):
+    ctrl = AttachmentController(service)
+    return await ctrl.list_recent(current_user_id, limit)
 
 
 @router.get(

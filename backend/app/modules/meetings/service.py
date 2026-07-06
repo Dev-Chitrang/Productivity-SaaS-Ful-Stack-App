@@ -660,6 +660,9 @@ class MeetingAIAnalysisService:
         self.repo = repo
         self.provider = provider
 
+    async def list_recent_analyses_for_user(self, user_id: UUID, limit: int = 5) -> Sequence[tuple]:
+        return await self.repo.list_recent_for_user(user_id, limit)
+
     async def get_analysis(self, session_id: UUID) -> MeetingAIAnalysis:
         analysis = await self.repo.get_by_session_id(session_id)
         if not analysis:

@@ -188,6 +188,11 @@ class AttachmentService:
             raise AttachmentNotFoundException(attachment_id)
         return attachment
 
+    async def list_recent_for_user(
+        self, owner_user_id: UUID, limit: int = 10
+    ) -> Sequence[Attachment]:
+        return await self.repo.list_recent_for_user(owner_user_id, limit)
+
     async def list_for_entity(
         self,
         entity_type: AttachmentEntityType,

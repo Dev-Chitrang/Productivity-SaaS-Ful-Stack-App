@@ -90,6 +90,15 @@ class AttachmentController:
         except AttachmentAccessDeniedException as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
 
+    async def list_recent(
+        self, owner_user_id: UUID, limit: int = 10
+    ) -> AttachmentListResponse:
+        attachments = await self.service.list_recent_for_user(owner_user_id, limit)
+        return AttachmentListResponse(
+            attachments=[AttachmentResponse.model_validate(a) for a in attachments],
+            total_count=len(attachments),
+        )
+
     async def delete(
         self, attachment_id: UUID, owner_user_id: UUID
     ) -> dict:
