@@ -1,6 +1,7 @@
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status
+from app.core.rate_limit import RateLimiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -20,7 +21,7 @@ async def get_whiteboard_service(db: AsyncSession = Depends(get_db)) -> Whiteboa
     # Note: If your system has an overall activity manager, pass it here as a second argument
     return WhiteboardService(repo)
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=WhiteboardResponse)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=WhiteboardResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def create_board_endpoint(
     payload: WhiteboardCreate,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -29,7 +30,7 @@ async def create_board_endpoint(
     ctrl = WhiteboardController(service)
     return await ctrl.create_board(current_user_id, payload)
 
-@router.get("", status_code=status.HTTP_200_OK, response_model=List[WhiteboardResponse])
+@router.get("", status_code=status.HTTP_200_OK, response_model=List[WhiteboardResponse], dependencies=[Depends(RateLimiter(60, 60, "general_get"))])
 async def list_boards_endpoint(
     is_archived: bool = Query(False),
     is_deleted: bool = Query(False),
@@ -47,7 +48,7 @@ async def list_boards_endpoint(
     ctrl = WhiteboardController(service)
     return await ctrl.list_boards(current_user_id, filters)
 
-@router.get("/{id}", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse)
+@router.get("/{id}", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse, dependencies=[Depends(RateLimiter(60, 60, "general_get"))])
 async def get_board_endpoint(
     id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -56,7 +57,7 @@ async def get_board_endpoint(
     ctrl = WhiteboardController(service)
     return await ctrl.get_board(current_user_id, id)
 
-@router.patch("/{id}", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse)
+@router.patch("/{id}", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def rename_board_endpoint(
     id: UUID,
     payload: WhiteboardRename,
@@ -66,7 +67,7 @@ async def rename_board_endpoint(
     ctrl = WhiteboardController(service)
     return await ctrl.rename_board(current_user_id, id, payload)
 
-@router.patch("/{id}/board", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse)
+@router.patch("/{id}/board", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def autosave_board_endpoint(
     id: UUID,
     payload: WhiteboardAutosave,
@@ -76,7 +77,7 @@ async def autosave_board_endpoint(
     ctrl = WhiteboardController(service)
     return await ctrl.autosave_board(current_user_id, id, payload)
 
-@router.patch("/{id}/favorite", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse)
+@router.patch("/{id}/favorite", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def toggle_favorite_endpoint(
     id: UUID,
     is_favorite: bool = Query(...),
@@ -86,7 +87,7 @@ async def toggle_favorite_endpoint(
     ctrl = WhiteboardController(service)
     return await ctrl.set_favorite_status(current_user_id, id, is_favorite)
 
-@router.patch("/{id}/archive", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse)
+@router.patch("/{id}/archive", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def toggle_archive_endpoint(
     id: UUID,
     is_archived: bool = Query(...),
@@ -96,7 +97,7 @@ async def toggle_archive_endpoint(
     ctrl = WhiteboardController(service)
     return await ctrl.set_archive_status(current_user_id, id, is_archived)
 
-@router.delete("/{id}", status_code=status.HTTP_200_OK)
+@router.delete("/{id}", status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def soft_delete_board_endpoint(
     id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -105,7 +106,7 @@ async def soft_delete_board_endpoint(
     ctrl = WhiteboardController(service)
     return await ctrl.delete_board(current_user_id, id)
 
-@router.patch("/{id}/restore", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse)
+@router.patch("/{id}/restore", status_code=status.HTTP_200_OK, response_model=WhiteboardResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def restore_board_endpoint(
     id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),

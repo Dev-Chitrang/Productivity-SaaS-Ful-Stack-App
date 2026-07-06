@@ -208,10 +208,10 @@ class AIAnalysisResponse(BaseModel):
 class RecentAIAnalysisItem(BaseModel):
     id: UUID
     session_id: UUID
-    meeting_id: UUID
-    meeting_title: str
-    session_date: datetime
-    status: AIAnalysisStatus
+    meeting_id: Optional[UUID] = None
+    meeting_title: Optional[str] = None
+    session_date: Optional[datetime] = None
+    status: Optional[AIAnalysisStatus] = None
     summary: Optional[str] = None
     agenda_coverage_percentage: Optional[int] = None
     processing_completed_at: Optional[datetime] = None

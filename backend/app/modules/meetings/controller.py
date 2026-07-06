@@ -16,6 +16,7 @@ from app.modules.meetings.exceptions import (
     MeetingNotFoundException, MeetingAccessDeniedException, MeetingValidationError,
     SessionAccessDeniedException
 )
+from app.modules.attachments.exceptions import AttachmentValidationError
 
 class MeetingController:
     def __init__(self, service: MeetingService):
@@ -135,6 +136,8 @@ class MeetingController:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
         except MeetingValidationError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except AttachmentValidationError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
     async def upload_transcript(self, meeting_id: UUID, user_id: UUID, file: UploadFile, content_type: str = "text/plain") -> dict:
         try:
@@ -146,6 +149,8 @@ class MeetingController:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
         except MeetingValidationError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except AttachmentValidationError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
     async def get_all_recordings(self, meeting_id: UUID, user_id: UUID) -> List[dict]:
         recordings = await self.service.list_recordings(meeting_id, user_id=user_id)

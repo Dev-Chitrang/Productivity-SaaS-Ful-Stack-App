@@ -175,7 +175,7 @@ class MeetingService:
         recording_data = {
             "session_id": active_session.id,
             "filename": result["filename"],
-            "content_type": content_type,
+            "content_type": result.get("content_type", content_type),
             "size": result["size"],
             "duration": duration,
             "storage_path": result["storage_path"],
@@ -201,7 +201,7 @@ class MeetingService:
         transcript_data = {
             "session_id": active_session.id,
             "filename": result["filename"],
-            "content_type": content_type,
+            "content_type": result.get("content_type", content_type),
             "size": result["size"],
             "storage_path": result["storage_path"],
         }

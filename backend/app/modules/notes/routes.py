@@ -1,6 +1,7 @@
 from typing import Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, status, Query
+from app.core.rate_limit import RateLimiter
 
 from app.modules.notes.dependencies import get_current_user_id, get_notes_service
 from app.modules.notes.controller import NoteController
@@ -8,7 +9,7 @@ from app.modules.notes.schemas import NoteCreate, NoteUpdate, NoteResponse, Note
 
 router = APIRouter(prefix="/notes", tags=["Knowledge & Notes Management Engine"])
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=NoteResponse)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=NoteResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def create_note_endpoint(
     payload: NoteCreate,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -17,7 +18,7 @@ async def create_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.create_user_note(current_user_id, payload)
 
-@router.get("", status_code=status.HTTP_200_OK, response_model=NoteListResponse)
+@router.get("", status_code=status.HTTP_200_OK, response_model=NoteListResponse, dependencies=[Depends(RateLimiter(60, 60, "general_get"))])
 async def list_notes_endpoint(
     search: Optional[str] = None,
     category: Optional[str] = None,
@@ -36,7 +37,7 @@ async def list_notes_endpoint(
         current_user_id, search, category, tag, favorite, pinned, archived, deleted, sort_by, sort_order
     )
 
-@router.get("/analytics", status_code=status.HTTP_200_OK)
+@router.get("/analytics", status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(60, 60, "general_get"))])
 async def notes_analytics_endpoint(
     current_user_id: UUID = Depends(get_current_user_id),
     service = Depends(get_notes_service)
@@ -44,7 +45,7 @@ async def notes_analytics_endpoint(
     ctrl = NoteController(service)
     return await ctrl.get_analytics(current_user_id)
 
-@router.get("/{note_id}", status_code=status.HTTP_200_OK, response_model=NoteResponse)
+@router.get("/{note_id}", status_code=status.HTTP_200_OK, response_model=NoteResponse, dependencies=[Depends(RateLimiter(60, 60, "general_get"))])
 async def get_note_endpoint(
     note_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -53,7 +54,7 @@ async def get_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.get_user_note(current_user_id, note_id)
 
-@router.patch("/{note_id}", status_code=status.HTTP_200_OK, response_model=NoteResponse)
+@router.patch("/{note_id}", status_code=status.HTTP_200_OK, response_model=NoteResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def update_note_endpoint(
     note_id: UUID,
     payload: NoteUpdate,
@@ -63,7 +64,7 @@ async def update_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.update_user_note(current_user_id, note_id, payload)
 
-@router.delete("/{note_id}", status_code=status.HTTP_200_OK)
+@router.delete("/{note_id}", status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def delete_note_endpoint(
     note_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -72,7 +73,7 @@ async def delete_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.delete_user_note(current_user_id, note_id)
 
-@router.patch("/{note_id}/restore", status_code=status.HTTP_200_OK, response_model=NoteResponse)
+@router.patch("/{note_id}/restore", status_code=status.HTTP_200_OK, response_model=NoteResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def restore_note_endpoint(
     note_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -81,7 +82,7 @@ async def restore_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.restore_user_note(current_user_id, note_id)
 
-@router.patch("/{note_id}/archive", status_code=status.HTTP_200_OK, response_model=NoteResponse)
+@router.patch("/{note_id}/archive", status_code=status.HTTP_200_OK, response_model=NoteResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def archive_note_endpoint(
     note_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -90,7 +91,7 @@ async def archive_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.archive_user_note(current_user_id, note_id)
 
-@router.patch("/{note_id}/unarchive", status_code=status.HTTP_200_OK, response_model=NoteResponse)
+@router.patch("/{note_id}/unarchive", status_code=status.HTTP_200_OK, response_model=NoteResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def unarchive_note_endpoint(
     note_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -99,7 +100,7 @@ async def unarchive_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.unarchive_user_note(current_user_id, note_id)
 
-@router.patch("/{note_id}/pin", status_code=status.HTTP_200_OK, response_model=NoteResponse)
+@router.patch("/{note_id}/pin", status_code=status.HTTP_200_OK, response_model=NoteResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def pin_note_endpoint(
     note_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -108,7 +109,7 @@ async def pin_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.pin_user_note(current_user_id, note_id)
 
-@router.patch("/{note_id}/unpin", status_code=status.HTTP_200_OK, response_model=NoteResponse)
+@router.patch("/{note_id}/unpin", status_code=status.HTTP_200_OK, response_model=NoteResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def unpin_note_endpoint(
     note_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -117,7 +118,7 @@ async def unpin_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.unpin_user_note(current_user_id, note_id)
 
-@router.patch("/{note_id}/favorite", status_code=status.HTTP_200_OK, response_model=NoteResponse)
+@router.patch("/{note_id}/favorite", status_code=status.HTTP_200_OK, response_model=NoteResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def favorite_note_endpoint(
     note_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -126,7 +127,7 @@ async def favorite_note_endpoint(
     ctrl = NoteController(service)
     return await ctrl.favorite_user_note(current_user_id, note_id)
 
-@router.patch("/{note_id}/unfavorite", status_code=status.HTTP_200_OK, response_model=NoteResponse)
+@router.patch("/{note_id}/unfavorite", status_code=status.HTTP_200_OK, response_model=NoteResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def unfavorite_note_endpoint(
     note_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
