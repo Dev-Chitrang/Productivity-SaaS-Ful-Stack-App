@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, status, UploadFile, File, Form, HTTPException, Body
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from app.core.rate_limit import RateLimiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -40,10 +41,22 @@ from app.modules.attachments.service import AttachmentService
 
 router = APIRouter(prefix="/meetings", tags=["Transactional Live Video Signaling Engine"])
 
-
 meeting_analysis_router = APIRouter(prefix="/meetings/{meeting_id}/analysis", tags=["Asynchronous Meeting AI Insights"])
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=MeetingResponse)
+
+# ---------------------------------------------------------------------------
+# Shared dependency — defined here so it can be used by any route below,
+# including /recent-analyses which must be declared before /{meeting_id}.
+# ---------------------------------------------------------------------------
+
+async def get_ai_analysis_service(db: AsyncSession = Depends(get_db)) -> MeetingAIAnalysisService:
+    repo = MeetingAIAnalysisRepository(db)
+    provider = AIProviderService()
+    # AI analysis service handles analysis only; completion emails are dispatched
+    # by MeetingCompletionService via the Celery completion pipeline.
+    return MeetingAIAnalysisService(repo, provider)
+
+@router.post("/", status_code=status.HTTP_201_CREATED, response_model=MeetingResponse, dependencies=[Depends(RateLimiter(10, 60, "meeting_creation"))])
 async def create_meeting_endpoint(
     payload: MeetingCreate,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -67,6 +80,15 @@ async def get_meeting_by_code_endpoint(
 ):
     ctrl = MeetingController(service)
     return await ctrl.get_meeting_by_code(code)
+
+@router.get("/recent-analyses", status_code=status.HTTP_200_OK, response_model=List[RecentAIAnalysisItem])
+async def list_recent_analyses_endpoint(
+    limit: int = Query(5, ge=1, le=20),
+    current_user_id: UUID = Depends(get_current_user_id),
+    ai_service: MeetingAIAnalysisService = Depends(get_ai_analysis_service),
+):
+    ctrl = MeetingAIAnalysisController(ai_service)
+    return await ctrl.list_recent_analyses(current_user_id, limit)
 
 @router.get("/{meeting_id}", status_code=status.HTTP_200_OK, response_model=MeetingResponse)
 async def get_meeting_endpoint(
@@ -476,13 +498,6 @@ async def list_invitations_endpoint(
     return await ctrl.list_invites(meeting_id, current_user_id)
 
 
-async def get_ai_analysis_service(db: AsyncSession = Depends(get_db)) -> MeetingAIAnalysisService:
-    repo = MeetingAIAnalysisRepository(db)
-    provider = AIProviderService()
-    # AI analysis service handles analysis only; completion emails are dispatched
-    # by MeetingCompletionService via the Celery completion pipeline.
-    return MeetingAIAnalysisService(repo, provider)
-
 @meeting_analysis_router.get("", status_code=status.HTTP_200_OK, response_model=AIAnalysisResponse)
 async def get_meeting_analysis_endpoint(
     meeting_id: UUID,
@@ -785,16 +800,6 @@ async def delete_session_attachment(
         await attachment_service.delete_verified(
             attachment_id, AttachmentEntityType.MEETING_SESSION, session_id
         )
-        return {"status": "success", "message": "Attachment deleted successfully."}
+        return None
     except AttachmentNotFoundException:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found.")
-
-
-@router.get("/recent-analyses", status_code=status.HTTP_200_OK, response_model=List[RecentAIAnalysisItem])
-async def list_recent_analyses_endpoint(
-    limit: int = Query(5, ge=1, le=20),
-    current_user_id: UUID = Depends(get_current_user_id),
-    ai_service: MeetingAIAnalysisService = Depends(get_ai_analysis_service),
-):
-    ctrl = MeetingAIAnalysisController(ai_service)
-    return await ctrl.list_recent_analyses(current_user_id, limit)

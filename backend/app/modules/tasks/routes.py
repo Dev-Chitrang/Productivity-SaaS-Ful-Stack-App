@@ -30,12 +30,14 @@ from app.modules.tasks.schemas import (
 )
 from app.modules.tasks.services import TaskService
 
+from app.core.rate_limit import RateLimiter
+
 router = APIRouter(prefix="/tasks", tags=["Unified Tasks Management Engine"])
 
 
 # ── Core Task CRUD ────────────────────────────────────────────────────────────
 
-@router.post("", status_code=status.HTTP_201_CREATED, response_model=TaskResponse)
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=TaskResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def create_task_endpoint(
     payload: TaskCreate,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -45,7 +47,7 @@ async def create_task_endpoint(
     return await ctrl.create_user_task(current_user_id, payload)
 
 
-@router.get("", status_code=status.HTTP_200_OK, response_model=TaskListResponse)
+@router.get("", status_code=status.HTTP_200_OK, response_model=TaskListResponse, dependencies=[Depends(RateLimiter(60, 60, "general_get"))])
 async def list_tasks_endpoint(
     search: Optional[str] = None,
     status_filter: Optional[TaskStatus] = Query(None, alias="status"),
@@ -81,7 +83,7 @@ async def list_tasks_endpoint(
     )
 
 
-@router.get("/analytics", status_code=status.HTTP_200_OK)
+@router.get("/analytics", status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(60, 60, "general_get"))])
 async def tasks_analytics_endpoint(
     current_user_id: UUID = Depends(get_current_user_id),
     service: TaskService = Depends(get_tasks_service),
@@ -90,7 +92,7 @@ async def tasks_analytics_endpoint(
     return await ctrl.get_analytics(current_user_id)
 
 
-@router.get("/{task_id}", status_code=status.HTTP_200_OK, response_model=TaskResponse)
+@router.get("/{task_id}", status_code=status.HTTP_200_OK, response_model=TaskResponse, dependencies=[Depends(RateLimiter(60, 60, "general_get"))])
 async def get_task_endpoint(
     task_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -100,7 +102,7 @@ async def get_task_endpoint(
     return await ctrl.get_user_task(current_user_id, task_id)
 
 
-@router.patch("/{task_id}", status_code=status.HTTP_200_OK, response_model=TaskResponse)
+@router.patch("/{task_id}", status_code=status.HTTP_200_OK, response_model=TaskResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def update_task_endpoint(
     task_id: UUID,
     payload: TaskUpdate,
@@ -111,7 +113,7 @@ async def update_task_endpoint(
     return await ctrl.update_user_task(current_user_id, task_id, payload)
 
 
-@router.delete("/{task_id}", status_code=status.HTTP_200_OK)
+@router.delete("/{task_id}", status_code=status.HTTP_200_OK, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def delete_task_endpoint(
     task_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -121,7 +123,7 @@ async def delete_task_endpoint(
     return await ctrl.delete_user_task(current_user_id, task_id)
 
 
-@router.patch("/{task_id}/restore", status_code=status.HTTP_200_OK, response_model=TaskResponse)
+@router.patch("/{task_id}/restore", status_code=status.HTTP_200_OK, response_model=TaskResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def restore_task_endpoint(
     task_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -131,7 +133,7 @@ async def restore_task_endpoint(
     return await ctrl.restore_user_task(current_user_id, task_id)
 
 
-@router.patch("/{task_id}/archive", status_code=status.HTTP_200_OK, response_model=TaskResponse)
+@router.patch("/{task_id}/archive", status_code=status.HTTP_200_OK, response_model=TaskResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def archive_task_endpoint(
     task_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -141,7 +143,7 @@ async def archive_task_endpoint(
     return await ctrl.archive_user_task(current_user_id, task_id)
 
 
-@router.patch("/{task_id}/unarchive", status_code=status.HTTP_200_OK, response_model=TaskResponse)
+@router.patch("/{task_id}/unarchive", status_code=status.HTTP_200_OK, response_model=TaskResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def unarchive_task_endpoint(
     task_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -151,7 +153,7 @@ async def unarchive_task_endpoint(
     return await ctrl.unarchive_user_task(current_user_id, task_id)
 
 
-@router.patch("/{task_id}/pin", status_code=status.HTTP_200_OK, response_model=TaskResponse)
+@router.patch("/{task_id}/pin", status_code=status.HTTP_200_OK, response_model=TaskResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def pin_task_endpoint(
     task_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -161,7 +163,7 @@ async def pin_task_endpoint(
     return await ctrl.pin_user_task(current_user_id, task_id)
 
 
-@router.patch("/{task_id}/unpin", status_code=status.HTTP_200_OK, response_model=TaskResponse)
+@router.patch("/{task_id}/unpin", status_code=status.HTTP_200_OK, response_model=TaskResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def unpin_task_endpoint(
     task_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -171,7 +173,7 @@ async def unpin_task_endpoint(
     return await ctrl.unpin_user_task(current_user_id, task_id)
 
 
-@router.patch("/{task_id}/favorite", status_code=status.HTTP_200_OK, response_model=TaskResponse)
+@router.patch("/{task_id}/favorite", status_code=status.HTTP_200_OK, response_model=TaskResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def favorite_task_endpoint(
     task_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -181,7 +183,7 @@ async def favorite_task_endpoint(
     return await ctrl.favorite_user_task(current_user_id, task_id)
 
 
-@router.patch("/{task_id}/unfavorite", status_code=status.HTTP_200_OK, response_model=TaskResponse)
+@router.patch("/{task_id}/unfavorite", status_code=status.HTTP_200_OK, response_model=TaskResponse, dependencies=[Depends(RateLimiter(20, 60, "write_entity"))])
 async def unfavorite_task_endpoint(
     task_id: UUID,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -195,6 +197,7 @@ async def unfavorite_task_endpoint(
     "/{task_id}/history",
     status_code=status.HTTP_200_OK,
     response_model=TaskHistoryListResponse,
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def get_task_history_endpoint(
     task_id: UUID,
@@ -226,6 +229,7 @@ async def _verify_task_access(
     status_code=status.HTTP_201_CREATED,
     response_model=AttachmentResponse,
     summary="Upload an attachment to a task",
+    dependencies=[Depends(RateLimiter(3, 60, "file_upload"))],
 )
 async def upload_task_attachment(
     task_id: UUID,
@@ -254,6 +258,7 @@ async def upload_task_attachment(
     status_code=status.HTTP_200_OK,
     response_model=AttachmentListResponse,
     summary="List all attachments for a task",
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def list_task_attachments(
     task_id: UUID,
@@ -275,6 +280,7 @@ async def list_task_attachments(
     "/{task_id}/attachments/{attachment_id}/download",
     response_class=FileResponse,
     summary="Download a task attachment",
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def download_task_attachment(
     task_id: UUID,
@@ -301,6 +307,7 @@ async def download_task_attachment(
     "/{task_id}/attachments/{attachment_id}",
     status_code=status.HTTP_200_OK,
     summary="Delete a task attachment",
+    dependencies=[Depends(RateLimiter(20, 60, "write_entity"))],
 )
 async def delete_task_attachment(
     task_id: UUID,

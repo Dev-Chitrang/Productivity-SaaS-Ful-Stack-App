@@ -25,6 +25,8 @@ from app.modules.attachments.exceptions import (
 from app.modules.attachments.schemas import AttachmentListResponse, AttachmentResponse
 from app.modules.attachments.service import AttachmentService
 
+from app.core.rate_limit import RateLimiter
+
 router = APIRouter(prefix="/calendar", tags=["Calendar Operations Management Engine"])
 
 
@@ -36,6 +38,7 @@ router = APIRouter(prefix="/calendar", tags=["Calendar Operations Management Eng
     "/events",
     status_code=status.HTTP_201_CREATED,
     response_model=CalendarEventResponse,
+    dependencies=[Depends(RateLimiter(20, 60, "write_entity"))],
 )
 async def create_event_endpoint(
     payload: CalendarEventCreate,
@@ -49,6 +52,7 @@ async def create_event_endpoint(
 @router.get(
     "/analytics",
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def calendar_analytics_endpoint(
     current_user_id: UUID = Depends(get_current_user_id),
@@ -62,6 +66,7 @@ async def calendar_analytics_endpoint(
     "/events/{event_id}",
     status_code=status.HTTP_200_OK,
     response_model=CalendarEventResponse,
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def get_event_endpoint(
     event_id: UUID,
@@ -76,6 +81,7 @@ async def get_event_endpoint(
     "/events/{event_id}",
     status_code=status.HTTP_200_OK,
     response_model=CalendarEventResponse,
+    dependencies=[Depends(RateLimiter(20, 60, "write_entity"))],
 )
 async def update_event_endpoint(
     event_id: UUID,
@@ -90,6 +96,7 @@ async def update_event_endpoint(
 @router.delete(
     "/events/{event_id}",
     status_code=status.HTTP_200_OK,
+    dependencies=[Depends(RateLimiter(20, 60, "write_entity"))],
 )
 async def delete_event_endpoint(
     event_id: UUID,
@@ -115,6 +122,7 @@ async def delete_event_endpoint(
         "The frontend is responsible for rendering the returned events in whichever "
         "view layout it chooses (month grid, week grid, day timeline, agenda list, etc.)."
     ),
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def list_events_endpoint(
     start: datetime = Query(..., description="Range start — inclusive, ISO 8601 with timezone."),
@@ -165,6 +173,7 @@ async def _verify_event_access(
     status_code=status.HTTP_201_CREATED,
     response_model=AttachmentResponse,
     summary="Upload an attachment to a calendar event",
+    dependencies=[Depends(RateLimiter(3, 60, "file_upload"))],
 )
 async def upload_calendar_attachment(
     event_id: UUID,
@@ -193,6 +202,7 @@ async def upload_calendar_attachment(
     status_code=status.HTTP_200_OK,
     response_model=AttachmentListResponse,
     summary="List all attachments for a calendar event",
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def list_calendar_attachments(
     event_id: UUID,
@@ -214,6 +224,7 @@ async def list_calendar_attachments(
     "/events/{event_id}/attachments/{attachment_id}/download",
     response_class=FileResponse,
     summary="Download a calendar event attachment",
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def download_calendar_attachment(
     event_id: UUID,
@@ -240,6 +251,7 @@ async def download_calendar_attachment(
     "/events/{event_id}/attachments/{attachment_id}",
     status_code=status.HTTP_200_OK,
     summary="Delete a calendar event attachment",
+    dependencies=[Depends(RateLimiter(20, 60, "write_entity"))],
 )
 async def delete_calendar_attachment(
     event_id: UUID,

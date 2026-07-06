@@ -12,6 +12,8 @@ from app.modules.attachments.enums import AttachmentEntityType
 from app.modules.attachments.schemas import AttachmentListResponse, AttachmentResponse
 from app.modules.attachments.service import AttachmentService
 
+from app.core.rate_limit import RateLimiter
+
 router = APIRouter(
     prefix="/attachments",
     tags=["Generic Attachment Infrastructure"],
@@ -23,6 +25,7 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
     response_model=AttachmentResponse,
     summary="Upload a file attachment for any supported entity",
+    dependencies=[Depends(RateLimiter(3, 60, "file_upload"))],
 )
 async def upload_attachment_endpoint(
     entity_type: AttachmentEntityType = Form(...),
@@ -45,6 +48,7 @@ async def upload_attachment_endpoint(
     status_code=status.HTTP_200_OK,
     response_model=AttachmentListResponse,
     summary="List the most recent attachments for the current user",
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def list_recent_attachments_endpoint(
     limit: int = Query(10, ge=1, le=50),
@@ -60,6 +64,7 @@ async def list_recent_attachments_endpoint(
     status_code=status.HTTP_200_OK,
     response_model=AttachmentResponse,
     summary="Retrieve attachment metadata",
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def get_attachment_metadata_endpoint(
     attachment_id: UUID,
@@ -74,6 +79,7 @@ async def get_attachment_metadata_endpoint(
     "/{attachment_id}/download",
     response_class=FileResponse,
     summary="Download an attachment file",
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def download_attachment_endpoint(
     attachment_id: UUID,
@@ -88,6 +94,7 @@ async def download_attachment_endpoint(
     "/{attachment_id}",
     status_code=status.HTTP_200_OK,
     summary="Delete an attachment and its stored file",
+    dependencies=[Depends(RateLimiter(20, 60, "write_entity"))],
 )
 async def delete_attachment_endpoint(
     attachment_id: UUID,
@@ -103,6 +110,7 @@ async def delete_attachment_endpoint(
     status_code=status.HTTP_200_OK,
     response_model=AttachmentListResponse,
     summary="List all attachments for a given entity",
+    dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def list_entity_attachments_endpoint(
     entity_type: AttachmentEntityType,

@@ -75,12 +75,6 @@ class AttachmentService:
     ) -> Attachment:
         """
         Validate, persist to storage, and record metadata in the database.
-
-        Validation order (fail-fast):
-          1. Filename present and safe.
-          2. Extension allowed.
-          3. Content-Type declared and allowed.
-          4. File size within limit.
         """
         # 1. Filename validation & sanitisation
         raw_name = file.filename or ""
@@ -94,33 +88,11 @@ class AttachmentService:
             raise AttachmentValidationError(
                 "The uploaded file must have a recognisable extension."
             )
-        if extension not in ALLOWED_EXTENSIONS:
-            raise AttachmentValidationError(
-                f"File type '.{extension}' is not permitted. "
-                f"Allowed types: {', '.join(sorted(ALLOWED_EXTENSIONS))}."
-            )
 
-        # 2. Content-Type validation
-        declared_ct = (file.content_type or "application/octet-stream").lower().strip()
-        # Strip charset suffix (e.g. "text/plain; charset=utf-8" → "text/plain")
-        content_type = declared_ct.split(";")[0].strip()
-        if content_type not in ALLOWED_CONTENT_TYPES:
-            raise AttachmentValidationError(
-                f"Content type '{content_type}' is not permitted."
-            )
-
-        # 3. Read content and validate size
+        # 2. Read content
         content = await file.read()
-        size = len(content)
-        if size == 0:
-            raise AttachmentValidationError("Empty files cannot be uploaded.")
-        if size > MAX_ATTACHMENT_SIZE_BYTES:
-            limit_mb = MAX_ATTACHMENT_SIZE_BYTES // (1024 * 1024)
-            raise AttachmentValidationError(
-                f"File exceeds the maximum allowed size of {limit_mb} MB."
-            )
 
-        # 4. Persist to storage
+        # 3. Persist to storage (validation occurs inside StorageService before writing)
         entity_dir = ENTITY_STORAGE_DIRS[entity_type]
         try:
             result = await self.storage.save_attachment(
@@ -128,14 +100,17 @@ class AttachmentService:
                 entity_id=str(entity_id),
                 filename=original_filename,
                 content=content,
-                content_type=content_type,
+                content_type="application/octet-stream",
             )
+        except AttachmentValidationError:
+            raise
         except Exception as exc:
             raise AttachmentStorageError(
                 f"Failed to persist attachment to storage: {exc}"
             ) from exc
 
         stored_filename: str = result["stored_filename"]
+        detected_content_type: str = result["content_type"]
 
         # 5. Guard against stored-filename collision (extremely unlikely but explicit)
         if await self.repo.stored_filename_exists(entity_type, entity_id, stored_filename):
@@ -146,9 +121,12 @@ class AttachmentService:
                     entity_id=str(entity_id),
                     filename=original_filename,
                     content=content,
-                    content_type=content_type,
+                    content_type="application/octet-stream",
                 )
                 stored_filename = result["stored_filename"]
+                detected_content_type = result["content_type"]
+            except AttachmentValidationError:
+                raise
             except Exception as exc:
                 raise AttachmentStorageError(
                     f"Storage collision retry failed: {exc}"
@@ -162,7 +140,7 @@ class AttachmentService:
                 "entity_id": entity_id,
                 "original_filename": original_filename,
                 "stored_filename": stored_filename,
-                "content_type": content_type,
+                "content_type": detected_content_type,
                 "extension": extension,
                 "size": result["size"],
                 "storage_provider": "local",

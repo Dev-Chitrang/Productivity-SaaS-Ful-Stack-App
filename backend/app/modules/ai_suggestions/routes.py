@@ -16,6 +16,8 @@ from app.modules.ai_suggestions.services import AISuggestionService
 from app.modules.tasks.dependencies import get_tasks_service
 from app.modules.tasks.services import TaskService
 
+from app.core.rate_limit import RateLimiter
+
 router = APIRouter(prefix="/ai-suggestions", tags=["AI Suggested Tasks"])
 
 
@@ -23,6 +25,7 @@ router = APIRouter(prefix="/ai-suggestions", tags=["AI Suggested Tasks"])
     "/{suggestion_id}/create-task",
     status_code=status.HTTP_200_OK,
     response_model=SuggestionResponse,
+    dependencies=[Depends(RateLimiter(3, 60, "ai_analysis"))],
 )
 async def create_task_from_suggestion_endpoint(
     suggestion_id: UUID,
@@ -39,6 +42,7 @@ async def create_task_from_suggestion_endpoint(
     "/{suggestion_id}/reject",
     status_code=status.HTTP_200_OK,
     response_model=SuggestionResponse,
+    dependencies=[Depends(RateLimiter(3, 60, "ai_analysis"))],
 )
 async def reject_suggestion_endpoint(
     suggestion_id: UUID,
@@ -54,6 +58,7 @@ async def reject_suggestion_endpoint(
     "",
     status_code=status.HTTP_200_OK,
     response_model=SuggestionListResponse,
+    dependencies=[Depends(RateLimiter(3, 60, "ai_analysis"))],
 )
 async def list_suggestions_endpoint(
     analysis_id: UUID = Query(..., description="Filter by AI analysis ID"),
