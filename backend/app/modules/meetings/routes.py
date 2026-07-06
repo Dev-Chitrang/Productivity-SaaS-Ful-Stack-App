@@ -1,6 +1,6 @@
 from typing import List, Optional
 from uuid import UUID
-from fastapi import APIRouter, Depends, status, UploadFile, File, Form, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, status, UploadFile, File, Form, HTTPException, Body
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +18,7 @@ from app.modules.meetings.schemas import (
     MeetingJoinInfoResponse, MeetingJoinResponse, RecordingResponse, TranscriptResponse,
     WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse, AIAnalysisResponse, AIAnalysisStatusResponse, AIAnalysisPayloadSchema, AIAnalysisStatus,
     SessionHistoryItemResponse, SessionDetailResponse,
+    RecentAIAnalysisItem,
 )
 from app.modules.meetings.enums import ParticipantStatus
 from app.modules.meetings.constants import WSEvent
@@ -787,3 +788,13 @@ async def delete_session_attachment(
         return {"status": "success", "message": "Attachment deleted successfully."}
     except AttachmentNotFoundException:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found.")
+
+
+@router.get("/recent-analyses", status_code=status.HTTP_200_OK, response_model=List[RecentAIAnalysisItem])
+async def list_recent_analyses_endpoint(
+    limit: int = Query(5, ge=1, le=20),
+    current_user_id: UUID = Depends(get_current_user_id),
+    ai_service: MeetingAIAnalysisService = Depends(get_ai_analysis_service),
+):
+    ctrl = MeetingAIAnalysisController(ai_service)
+    return await ctrl.list_recent_analyses(current_user_id, limit)

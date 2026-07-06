@@ -1,46 +1,44 @@
-import { useNotesAnalytics, useTasksAnalytics, useCalendarAnalytics } from "../hooks/useDashboardApi"
-import { TodayOverview } from "../components/TodayOverview"
-import { CalendarAnalytics } from "../components/CalendarAnalytics"
-import { NotesAnalytics } from "../components/NotesAnalytics"
-import { TasksAnalytics } from "../components/TasksAnalytics"
+import { WelcomeSection } from "../components/WelcomeSection"
+import { OverviewCards } from "../components/OverviewCards"
+import { TodaysAgenda } from "../components/TodaysAgenda"
+import { UpcomingMeetings } from "../components/UpcomingMeetings"
+import { RecentTasks } from "../components/RecentTasks"
+import { RecentNotes } from "../components/RecentNotes"
+import { RecentWhiteboards } from "../components/RecentWhiteboards"
+import { RecentAttachments } from "../components/RecentAttachments"
+import { RecentAnalyses } from "../components/RecentAnalyses"
+import { RecentActivity } from "../components/RecentActivity"
 
 function DashboardPage() {
-    const { data: notesData, isLoading: notesLoading } = useNotesAnalytics()
-    const { data: tasksData, isLoading: tasksLoading } = useTasksAnalytics()
-    const { data: calendarData, isLoading: calendarLoading } = useCalendarAnalytics()
-
-    const overviewLoading = notesLoading || tasksLoading || calendarLoading
-
     return (
-        <div className="mx-auto max-w-6xl px-6 py-8 space-y-8">
-            <div className="flex flex-col gap-1">
-                <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-                <p className="text-sm text-muted-foreground">
-                    Welcome to your workspace.
-                </p>
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8 space-y-6">
+            {/* Top: greeting + quick actions */}
+            <WelcomeSection />
+
+            {/* Overview stat cards */}
+            <OverviewCards />
+
+            {/* Main content grid: agenda + meetings on left, activity feed on right */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2 space-y-4">
+                    <TodaysAgenda />
+                    <UpcomingMeetings />
+                </div>
+                <div className="space-y-4">
+                    <RecentActivity />
+                </div>
             </div>
 
-            <section>
-                <h2 className="text-sm font-semibold tracking-tight mb-3">Today's Overview</h2>
-                <TodayOverview
-                    calendarData={calendarData}
-                    tasksData={tasksData}
-                    notesData={notesData}
-                    loading={overviewLoading}
-                />
-            </section>
+            {/* Secondary content: tasks, notes, whiteboards, attachments */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <RecentTasks />
+                <RecentNotes />
+                <RecentWhiteboards />
+                <RecentAttachments />
+            </div>
 
-            <hr className="border-border" />
-
-            <CalendarAnalytics data={calendarData} loading={calendarLoading} />
-
-            <hr className="border-border" />
-
-            <NotesAnalytics data={notesData} loading={notesLoading} />
-
-            <hr className="border-border" />
-
-            <TasksAnalytics data={tasksData} loading={tasksLoading} />
+            {/* AI analyses — full width */}
+            <RecentAnalyses />
         </div>
     )
 }

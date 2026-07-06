@@ -397,6 +397,34 @@ class MeetingAIAnalysisRepository:
         )
         return (await self.db.execute(stmt)).scalar_one_or_none()
 
+    async def list_recent_for_user(self, user_id: UUID, limit: int = 5) -> Sequence[tuple]:
+        stmt = (
+            select(
+                MeetingAIAnalysis.id,
+                MeetingAIAnalysis.session_id,
+                MeetingAIAnalysis.status,
+                MeetingAIAnalysis.summary,
+                MeetingAIAnalysis.agenda_coverage_percentage,
+                MeetingAIAnalysis.processing_completed_at,
+                MeetingAIAnalysis.created_at,
+                Meeting.id.label("meeting_id"),
+                Meeting.title.label("meeting_title"),
+                MeetingSession.started_at.label("session_date"),
+            )
+            .join(MeetingSession, MeetingAIAnalysis.session_id == MeetingSession.id)
+            .join(Meeting, MeetingSession.meeting_id == Meeting.id)
+            .where(
+                and_(
+                    Meeting.host_id == user_id,
+                    MeetingAIAnalysis.status == AIAnalysisStatus.COMPLETED,
+                )
+            )
+            .order_by(MeetingAIAnalysis.processing_completed_at.desc().nulls_last())
+            .limit(limit)
+        )
+        result = await self.db.execute(stmt)
+        return result.all()
+
     async def update_status(self, analysis_id: UUID, status: AIAnalysisStatus, **kwargs) -> None:
         payload = {"status": status, "updated_at": datetime.now(timezone.utc)}
         if status == AIAnalysisStatus.PROCESSING:

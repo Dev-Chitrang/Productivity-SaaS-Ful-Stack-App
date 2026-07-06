@@ -74,6 +74,20 @@ class AttachmentRepository:
         result = await self.db.execute(stmt)
         return result.scalars().all()
 
+    async def list_recent_for_user(
+        self,
+        owner_user_id: UUID,
+        limit: int = 10,
+    ) -> Sequence[Attachment]:
+        stmt = (
+            select(Attachment)
+            .where(Attachment.owner_user_id == owner_user_id)
+            .order_by(Attachment.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalars().all()
+
     async def stored_filename_exists(
         self,
         entity_type: AttachmentEntityType,

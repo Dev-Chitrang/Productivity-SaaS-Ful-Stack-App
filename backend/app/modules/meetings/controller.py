@@ -10,6 +10,7 @@ from app.modules.meetings.schemas import (
     MeetingJoinInfoResponse, MeetingJoinResponse, TranscriptResponse, RecordingResponse,
     WaitingCountResponse, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse, AIAnalysisResponse, AIAnalysisStatusResponse, AIAnalysisPayloadSchema,
     SessionHistoryItemResponse, SessionDetailResponse, SessionParticipantSummary, SessionArtifactFlags,
+    RecentAIAnalysisItem,
 )
 from app.modules.meetings.exceptions import (
     MeetingNotFoundException, MeetingAccessDeniedException, MeetingValidationError,
@@ -231,6 +232,24 @@ class MeetingAIAnalysisController:
     async def get_completed_analysis(self, session_id: UUID) -> dict:
         analysis = await self.service.get_analysis(session_id)
         return AIAnalysisResponse.model_validate(analysis)
+
+    async def list_recent_analyses(self, user_id: UUID, limit: int = 5) -> List[RecentAIAnalysisItem]:
+        rows = await self.service.list_recent_analyses_for_user(user_id, limit)
+        items = []
+        for row in rows:
+            items.append(RecentAIAnalysisItem(
+                id=row[0],
+                session_id=row[1],
+                status=row[2],
+                summary=row[3],
+                agenda_coverage_percentage=row[4],
+                processing_completed_at=row[5],
+                created_at=row[6],
+                meeting_id=row[7],
+                meeting_title=row[8],
+                session_date=row[9],
+            ))
+        return items
 
     async def get_tracking_status(self, session_id: UUID) -> dict:
         analysis = await self.service.get_analysis_status(session_id)
