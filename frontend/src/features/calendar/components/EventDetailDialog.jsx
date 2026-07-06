@@ -127,10 +127,15 @@ export function EventDetailDialog({ open, event, onClose, onEdit, onDelete }) {
                         </div>
                     )}
 
-                    {/* Description */}
+                    {/* Event Notes */}
                     {event.description && (
-                        <div className={cn("px-3 py-2.5 border text-xs leading-relaxed", faint)}>
-                            {event.description}
+                        <div>
+                            <p className="text-[11px] font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                                Notes
+                            </p>
+                            <div className={cn("px-3 py-2.5 border text-xs leading-relaxed", faint)}>
+                                {event.description}
+                            </div>
                         </div>
                     )}
                 </div>

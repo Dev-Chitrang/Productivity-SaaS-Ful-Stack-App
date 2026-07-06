@@ -13,6 +13,7 @@ from app.modules.tasks.exceptions import (
     TaskValidationError
 )
 from app.utils.tiptap_converter import tiptap_doc_to_plain_text
+from app.modules.entity_links.repository import EntityLinkRepository
 
 class TaskService:
     def __init__(self, repo: TaskRepository, attachment_service=None):
@@ -104,6 +105,9 @@ class TaskService:
             await self._attachment_service.delete_all_for_entity(
                 AttachmentEntityType.TASK, task_id
             )
+        # Soft-delete associated entity links
+        el_repo = EntityLinkRepository(self.repo.db)
+        await el_repo.soft_delete_by_entity("task", task_id)
         await self.repo.soft_delete(task)
         await self.repo.create_history_bulk([{
             "task_id": task.id, "user_id": user_id, "action": "DELETED", "field_name": None, "old_value": None, "new_value": None

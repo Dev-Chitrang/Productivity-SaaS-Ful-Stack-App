@@ -59,7 +59,7 @@ export function RichTextEditor({
 
     return (
         <div className={cn("", className)}>
-            <EditorContent editor={editor} className={cn("h-full", editorClassName)} />
+            <EditorContent editor={editor} className={cn(editorClassName)} />
         </div>
     )
 }

@@ -1,4 +1,3 @@
-import { useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useAuthContext } from "@/context/AuthContext"
 import {
@@ -9,9 +8,11 @@ import {
     useSessionAnalysisStatus,
 } from "../hooks/useMeetingsApi"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
+import { LinkedTasksPanel } from "../components/LinkedTasksPanel"
 import {
     ArrowLeft,
     CalendarBlank,
@@ -28,6 +29,7 @@ import {
     User,
     UserCircle,
     Crown,
+    ListChecks,
 } from "@phosphor-icons/react"
 import toast from "react-hot-toast"
 import { meetingsApi } from "../api/meetingsApi"
@@ -119,7 +121,6 @@ function ParticipantsSection({ participants, hostId }) {
         )
     }
 
-    // Sort: host first, then registered, then guests
     const sorted = [...participants].sort((a, b) => {
         const rank = (p) => {
             if (p.user_id === hostId) return 0
@@ -138,7 +139,6 @@ function ParticipantsSection({ participants, hostId }) {
                 const statusLabel = PARTICIPANT_STATUS_LABELS[p.status] || p.status
                 const attended = p.status === "ADMITTED" || p.status === "LEFT"
 
-                // Determine role label and icon
                 let roleLabel, RoleIcon, roleClass
                 if (isHost) {
                     roleLabel = "Host"
@@ -157,7 +157,6 @@ function ParticipantsSection({ participants, hostId }) {
 
                 return (
                     <div key={p.id} className="flex items-center gap-3 py-2.5 text-xs">
-                        {/* Avatar */}
                         <div
                             className={`flex size-6 shrink-0 items-center justify-center rounded-full ${isHost
                                 ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
@@ -167,7 +166,6 @@ function ParticipantsSection({ participants, hostId }) {
                             <RoleIcon className="size-3.5" weight={isHost ? "fill" : "regular"} />
                         </div>
 
-                        {/* Name + join/leave times */}
                         <div className="min-w-0 flex-1">
                             <p className="font-medium truncate">{name}</p>
                             <p className="text-muted-foreground">
@@ -177,7 +175,6 @@ function ParticipantsSection({ participants, hostId }) {
                             </p>
                         </div>
 
-                        {/* Role badge */}
                         <span
                             className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium shrink-0 ${roleClass}`}
                         >
@@ -185,7 +182,6 @@ function ParticipantsSection({ participants, hostId }) {
                             {roleLabel}
                         </span>
 
-                        {/* Attendance badge */}
                         <span
                             className={`inline-flex items-center gap-0.5 rounded border px-1.5 py-0.5 text-[10px] font-medium shrink-0 ${attended
                                 ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800"
@@ -202,181 +198,7 @@ function ParticipantsSection({ participants, hostId }) {
     )
 }
 
-// ─── Recording Artifact ───────────────────────────────────────────────────────
-
-function RecordingsArtifact({ meetingId, sessionId, hasRecording }) {
-    const [open, setOpen] = useState(false)
-    const { data: recordings = [], isLoading } = useSessionRecordings(
-        meetingId,
-        sessionId,
-        open
-    )
-
-    const handleDownload = async (rec) => {
-        try {
-            const { data } = await meetingsApi.downloadRecording(rec.id)
-            const url = URL.createObjectURL(data)
-            const a = document.createElement("a")
-            a.href = url
-            a.download = rec.filename
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
-        } catch {
-            toast.error("Failed to download recording.")
-        }
-    }
-
-    return (
-        <div>
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="w-full flex items-center justify-between py-3 text-left"
-                aria-expanded={open}
-            >
-                <div className="flex items-center gap-2">
-                    <Microphone className="size-4 text-muted-foreground" />
-                    <span className="text-xs font-medium">Recording</span>
-                    {!hasRecording && (
-                        <span className="text-[10px] text-muted-foreground">(none)</span>
-                    )}
-                </div>
-                <span className="text-[10px] text-muted-foreground">{open ? "Hide" : "Show"}</span>
-            </button>
-
-            {open && (
-                <div className="pb-3">
-                    {isLoading ? (
-                        <div className="space-y-2">
-                            <Skeleton className="h-8 w-full" />
-                            <Skeleton className="h-8 w-4/5" />
-                        </div>
-                    ) : recordings.length === 0 ? (
-                        <p className="text-xs text-muted-foreground py-2 text-center">
-                            No recordings for this session.
-                        </p>
-                    ) : (
-                        <div className="divide-y divide-border rounded border border-border">
-                            {recordings.map((rec) => (
-                                <div
-                                    key={rec.id}
-                                    className="flex items-center gap-3 px-3 py-2.5 text-xs"
-                                >
-                                    <Microphone className="size-4 shrink-0 text-muted-foreground" />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate font-medium">{rec.filename}</p>
-                                        <div className="flex items-center gap-3 text-muted-foreground mt-0.5">
-                                            {rec.duration != null && (
-                                                <span>{formatFileDuration(rec.duration)}</span>
-                                            )}
-                                            <span>{formatSize(rec.size)}</span>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-xs"
-                                        onClick={() => handleDownload(rec)}
-                                        aria-label="Download recording"
-                                    >
-                                        <DownloadSimple className="size-3.5" />
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    )
-}
-
-// ─── Transcript Artifact ──────────────────────────────────────────────────────
-
-function TranscriptArtifact({ meetingId, sessionId, hasTranscript }) {
-    const [open, setOpen] = useState(false)
-    const { data: transcripts = [], isLoading } = useSessionTranscripts(
-        meetingId,
-        sessionId,
-        open
-    )
-
-    const handleDownload = async (tx) => {
-        try {
-            const { data } = await meetingsApi.downloadTranscript(tx.id)
-            const url = URL.createObjectURL(data)
-            const a = document.createElement("a")
-            a.href = url
-            a.download = tx.filename
-            document.body.appendChild(a)
-            a.click()
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
-        } catch {
-            toast.error("Failed to download transcript.")
-        }
-    }
-
-    return (
-        <div>
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="w-full flex items-center justify-between py-3 text-left"
-                aria-expanded={open}
-            >
-                <div className="flex items-center gap-2">
-                    <FileText className="size-4 text-muted-foreground" />
-                    <span className="text-xs font-medium">Transcript</span>
-                    {!hasTranscript && (
-                        <span className="text-[10px] text-muted-foreground">(none)</span>
-                    )}
-                </div>
-                <span className="text-[10px] text-muted-foreground">{open ? "Hide" : "Show"}</span>
-            </button>
-
-            {open && (
-                <div className="pb-3">
-                    {isLoading ? (
-                        <div className="space-y-2">
-                            <Skeleton className="h-8 w-full" />
-                        </div>
-                    ) : transcripts.length === 0 ? (
-                        <p className="text-xs text-muted-foreground py-2 text-center">
-                            No transcripts for this session.
-                        </p>
-                    ) : (
-                        <div className="divide-y divide-border rounded border border-border">
-                            {transcripts.map((tx) => (
-                                <div
-                                    key={tx.id}
-                                    className="flex items-center gap-3 px-3 py-2.5 text-xs"
-                                >
-                                    <FileText className="size-4 shrink-0 text-muted-foreground" />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="truncate font-medium">{tx.filename}</p>
-                                        <p className="text-muted-foreground mt-0.5">{formatSize(tx.size)}</p>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-xs"
-                                        onClick={() => handleDownload(tx)}
-                                        aria-label="Download transcript"
-                                    >
-                                        <DownloadSimple className="size-3.5" />
-                                    </Button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    )
-}
-
-// ─── AI Analysis Artifact ─────────────────────────────────────────────────────
+// ─── Tab: AI Analysis ─────────────────────────────────────────────────────────
 
 function PriorityBadge({ priority }) {
     const colors = {
@@ -395,183 +217,290 @@ function PriorityBadge({ priority }) {
     )
 }
 
-function AIAnalysisArtifact({ meetingId, sessionId, hasAnalysis }) {
-    const [open, setOpen] = useState(false)
-    const { data: analysis, isLoading } = useSessionAnalysis(meetingId, sessionId, open)
-    const { data: statusData } = useSessionAnalysisStatus(meetingId, sessionId, open)
+function AnalysisTab({ meetingId, sessionId }) {
+    const { data: analysis, isLoading } = useSessionAnalysis(meetingId, sessionId, true)
+    const { data: statusData } = useSessionAnalysisStatus(meetingId, sessionId, true)
     const status = statusData?.status || analysis?.status
 
-    return (
-        <div>
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="w-full flex items-center justify-between py-3 text-left"
-                aria-expanded={open}
-            >
-                <div className="flex items-center gap-2">
-                    <Robot className="size-4 text-muted-foreground" />
-                    <span className="text-xs font-medium">AI Analysis</span>
-                    {!hasAnalysis && (
-                        <span className="text-[10px] text-muted-foreground">(none)</span>
-                    )}
-                </div>
-                <span className="text-[10px] text-muted-foreground">{open ? "Hide" : "Show"}</span>
-            </button>
+    if (isLoading) {
+        return (
+            <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+            </div>
+        )
+    }
 
-            {open && (
-                <div className="pb-3">
-                    {isLoading ? (
+    if (status === "PENDING" || status === "PROCESSING") {
+        return (
+            <div className="flex items-center gap-2 py-6 text-xs text-muted-foreground">
+                <Spinner className="size-3.5 animate-spin" />
+                {status === "PENDING"
+                    ? "Waiting to process AI analysis..."
+                    : "Generating AI analysis..."}
+            </div>
+        )
+    }
+
+    if (!analysis) {
+        return (
+            <p className="text-xs text-muted-foreground py-6 text-center">
+                No AI analysis for this session.
+            </p>
+        )
+    }
+
+    if (status === "FAILED") {
+        return (
+            <div className="flex items-center gap-2 py-6 text-xs text-destructive">
+                <XCircle className="size-4" />
+                AI analysis could not be generated.
+            </div>
+        )
+    }
+
+    if (analysis.status === "COMPLETED") {
+        return (
+            <div className="space-y-4">
+                {analysis.summary && (
+                    <div>
+                        <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            Summary
+                        </h4>
+                        <p className="text-xs">{analysis.summary}</p>
+                    </div>
+                )}
+                {analysis.agenda_coverage_percentage != null && (
+                    <div>
+                        <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            Agenda Coverage
+                        </h4>
+                        <div className="flex items-center gap-3">
+                            <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                                <div
+                                    className="h-full rounded-full bg-primary transition-all"
+                                    style={{ width: `${analysis.agenda_coverage_percentage}%` }}
+                                />
+                            </div>
+                            <span className="text-xs font-medium tabular-nums">
+                                {analysis.agenda_coverage_percentage}%
+                            </span>
+                        </div>
+                    </div>
+                )}
+                {analysis.covered_points?.length > 0 && (
+                    <div>
+                        <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            Covered Points
+                        </h4>
+                        <ul className="space-y-1">
+                            {analysis.covered_points.map((pt, i) => (
+                                <li key={i} className="flex items-start gap-2 text-xs">
+                                    <CheckCircle
+                                        className="mt-0.5 size-3.5 shrink-0 text-green-500"
+                                        weight="fill"
+                                    />
+                                    {pt}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                {analysis.out_of_agenda_points?.length > 0 && (
+                    <div>
+                        <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            Out of Agenda
+                        </h4>
+                        <ul className="space-y-1">
+                            {analysis.out_of_agenda_points.map((pt, i) => (
+                                <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+                                    <span className="mt-0.5 shrink-0">&bull;</span>
+                                    {pt}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+                {analysis.suggested_tasks?.length > 0 && (
+                    <div>
+                        <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                            Suggested Tasks
+                        </h4>
                         <div className="space-y-2">
-                            <Skeleton className="h-4 w-full" />
-                            <Skeleton className="h-4 w-3/4" />
-                            <Skeleton className="h-4 w-1/2" />
-                        </div>
-                    ) : status === "PENDING" || status === "PROCESSING" ? (
-                        <div className="flex items-center gap-2 py-3 text-xs text-muted-foreground">
-                            <Spinner className="size-3.5 animate-spin" />
-                            {status === "PENDING"
-                                ? "Waiting to process AI analysis..."
-                                : "Generating AI analysis..."}
-                        </div>
-                    ) : !analysis ? (
-                        <p className="text-xs text-muted-foreground py-2 text-center">
-                            No AI analysis for this session.
-                        </p>
-                    ) : status === "FAILED" ? (
-                        <div className="flex items-center gap-2 py-3 text-xs text-destructive">
-                            <XCircle className="size-4" />
-                            AI analysis could not be generated.
-                        </div>
-                    ) : analysis.status === "COMPLETED" ? (
-                        <div className="space-y-4 pt-1">
-                            {analysis.summary && (
-                                <div>
-                                    <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                        Summary
-                                    </h4>
-                                    <p className="text-xs">{analysis.summary}</p>
-                                </div>
-                            )}
-                            {analysis.agenda_coverage_percentage != null && (
-                                <div>
-                                    <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                        Agenda Coverage
-                                    </h4>
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-                                            <div
-                                                className="h-full rounded-full bg-primary transition-all"
-                                                style={{ width: `${analysis.agenda_coverage_percentage}%` }}
-                                            />
-                                        </div>
-                                        <span className="text-xs font-medium tabular-nums">
-                                            {analysis.agenda_coverage_percentage}%
-                                        </span>
+                            {analysis.suggested_tasks.map((task, i) => (
+                                <div key={i} className="space-y-1 rounded border border-border p-2.5">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <p className="text-xs font-medium">{task.title}</p>
+                                        <PriorityBadge priority={task.priority} />
                                     </div>
+                                    {task.description && (
+                                        <p className="text-xs text-muted-foreground">{task.description}</p>
+                                    )}
                                 </div>
-                            )}
-                            {analysis.covered_points?.length > 0 && (
-                                <div>
-                                    <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                        Covered Points
-                                    </h4>
-                                    <ul className="space-y-1">
-                                        {analysis.covered_points.map((pt, i) => (
-                                            <li key={i} className="flex items-start gap-2 text-xs">
-                                                <CheckCircle
-                                                    className="mt-0.5 size-3.5 shrink-0 text-green-500"
-                                                    weight="fill"
-                                                />
-                                                {pt}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                            {analysis.out_of_agenda_points?.length > 0 && (
-                                <div>
-                                    <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                        Out of Agenda
-                                    </h4>
-                                    <ul className="space-y-1">
-                                        {analysis.out_of_agenda_points.map((pt, i) => (
-                                            <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                                                <span className="mt-0.5 shrink-0">&bull;</span>
-                                                {pt}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                            {analysis.suggested_tasks?.length > 0 && (
-                                <div>
-                                    <h4 className="mb-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                                        Suggested Tasks
-                                    </h4>
-                                    <div className="space-y-2">
-                                        {analysis.suggested_tasks.map((task, i) => (
-                                            <div key={i} className="space-y-1 rounded border border-border p-2.5">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <p className="text-xs font-medium">{task.title}</p>
-                                                    <PriorityBadge priority={task.priority} />
-                                                </div>
-                                                {task.description && (
-                                                    <p className="text-xs text-muted-foreground">{task.description}</p>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+                            ))}
                         </div>
-                    ) : null}
+                    </div>
+                )}
+            </div>
+        )
+    }
+
+    return null
+}
+
+// ─── Tab: Transcript ──────────────────────────────────────────────────────────
+
+function TranscriptTab({ meetingId, sessionId }) {
+    const { data: transcripts = [], isLoading } = useSessionTranscripts(meetingId, sessionId, true)
+
+    const handleDownload = async (tx) => {
+        try {
+            const { data } = await meetingsApi.downloadTranscript(tx.id)
+            const url = URL.createObjectURL(data)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = tx.filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        } catch {
+            toast.error("Failed to download transcript.")
+        }
+    }
+
+    if (isLoading) {
+        return (
+            <div className="space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-4/5" />
+            </div>
+        )
+    }
+
+    if (transcripts.length === 0) {
+        return (
+            <p className="text-xs text-muted-foreground py-6 text-center">
+                No transcripts for this session.
+            </p>
+        )
+    }
+
+    return (
+        <div className="divide-y divide-border rounded border border-border">
+            {transcripts.map((tx) => (
+                <div
+                    key={tx.id}
+                    className="flex items-center gap-3 px-3 py-2.5 text-xs"
+                >
+                    <FileText className="size-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{tx.filename}</p>
+                        <p className="text-muted-foreground mt-0.5">{formatSize(tx.size)}</p>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => handleDownload(tx)}
+                        aria-label="Download transcript"
+                    >
+                        <DownloadSimple className="size-3.5" />
+                    </Button>
                 </div>
-            )}
+            ))}
         </div>
     )
 }
 
-// ─── Attachments Artifact ────────────────────────────────────────────────────
+// ─── Tab: Recordings ──────────────────────────────────────────────────────────
 
-function AttachmentsArtifact({ meetingId, sessionId, sessionAttachments, uploadMutation, deleteMutation }) {
-    const [open, setOpen] = useState(false)
+function RecordingsTab({ meetingId, sessionId }) {
+    const { data: recordings = [], isLoading } = useSessionRecordings(meetingId, sessionId, true)
+
+    const handleDownload = async (rec) => {
+        try {
+            const { data } = await meetingsApi.downloadRecording(rec.id)
+            const url = URL.createObjectURL(data)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = rec.filename
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        } catch {
+            toast.error("Failed to download recording.")
+        }
+    }
+
+    if (isLoading) {
+        return (
+            <div className="space-y-2">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-4/5" />
+            </div>
+        )
+    }
+
+    if (recordings.length === 0) {
+        return (
+            <p className="text-xs text-muted-foreground py-6 text-center">
+                No recordings for this session.
+            </p>
+        )
+    }
 
     return (
-        <div>
-            <button
-                type="button"
-                onClick={() => setOpen((v) => !v)}
-                className="w-full flex items-center justify-between py-3 text-left"
-                aria-expanded={open}
-            >
-                <div className="flex items-center gap-2">
-                    <Paperclip className="size-4 text-muted-foreground" />
-                    <span className="text-xs font-medium">Attachments</span>
+        <div className="divide-y divide-border rounded border border-border">
+            {recordings.map((rec) => (
+                <div
+                    key={rec.id}
+                    className="flex items-center gap-3 px-3 py-2.5 text-xs"
+                >
+                    <Microphone className="size-4 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium">{rec.filename}</p>
+                        <div className="flex items-center gap-3 text-muted-foreground mt-0.5">
+                            {rec.duration != null && (
+                                <span>{formatFileDuration(rec.duration)}</span>
+                            )}
+                            <span>{formatSize(rec.size)}</span>
+                        </div>
+                    </div>
+                    <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => handleDownload(rec)}
+                        aria-label="Download recording"
+                    >
+                        <DownloadSimple className="size-3.5" />
+                    </Button>
                 </div>
-                <span className="text-[10px] text-muted-foreground">{open ? "Hide" : "Show"}</span>
-            </button>
-
-            {open && (
-                <div className="pb-3">
-                    <AttachmentPanelContainer
-                        attachments={sessionAttachments.data}
-                        isLoading={sessionAttachments.isLoading}
-                        isError={sessionAttachments.isError}
-                        uploadMutation={uploadMutation}
-                        deleteMutation={deleteMutation}
-                        downloadFn={async (attachmentId) => {
-                            const { data } = await attachmentsApi.downloadForSession(
-                                meetingId,
-                                sessionId,
-                                attachmentId,
-                            )
-                            return data
-                        }}
-                    />
-                </div>
-            )}
+            ))}
         </div>
+    )
+}
+
+// ─── Tab: Attachments ─────────────────────────────────────────────────────────
+
+function AttachmentsTab({ meetingId, sessionId, sessionAttachments, uploadMutation, deleteMutation }) {
+    return (
+        <AttachmentPanelContainer
+            attachments={sessionAttachments.data}
+            isLoading={sessionAttachments.isLoading}
+            isError={sessionAttachments.isError}
+            uploadMutation={uploadMutation}
+            deleteMutation={deleteMutation}
+            downloadFn={async (attachmentId) => {
+                const { data } = await attachmentsApi.downloadForSession(
+                    meetingId,
+                    sessionId,
+                    attachmentId,
+                )
+                return data
+            }}
+        />
     )
 }
 
@@ -656,8 +585,6 @@ function SessionDetailPage() {
     const statusClass =
         SESSION_STATUS_CLASSES[session.status] || SESSION_STATUS_CLASSES.ENDED
     const statusLabel = SESSION_STATUS_LABELS[session.status] || session.status
-    const { artifacts = {} } = session
-
     return (
         <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
             {/* Back nav */}
@@ -727,37 +654,70 @@ function SessionDetailPage() {
                 </CardContent>
             </Card>
 
-            {/* Artifacts — lazy-loaded on expand */}
+            {/* Tabs: AI Analysis | Transcript | Recordings | Linked Tasks | Attachments */}
             <Card className="mt-4">
-                <CardHeader>
-                    <CardTitle className="text-sm">Artifacts</CardTitle>
-                </CardHeader>
-                <CardContent className="divide-y divide-border">
-                    <RecordingsArtifact
-                        meetingId={meetingId}
-                        sessionId={sessionId}
-                        hasRecording={artifacts.has_recording}
-                    />
-                    <TranscriptArtifact
-                        meetingId={meetingId}
-                        sessionId={sessionId}
-                        hasTranscript={artifacts.has_transcript}
-                    />
-                    <AIAnalysisArtifact
-                        meetingId={meetingId}
-                        sessionId={sessionId}
-                        hasAnalysis={artifacts.has_ai_analysis}
-                    />
+                <CardHeader className="pb-0">
+                    <Tabs defaultValue="analysis">
+                        <TabsList>
+                            <TabsTrigger value="analysis" className="flex items-center gap-1.5">
+                                <Robot className="size-3.5" />
+                                AI Analysis
+                            </TabsTrigger>
+                            <TabsTrigger value="transcript" className="flex items-center gap-1.5">
+                                <FileText className="size-3.5" />
+                                Transcript
+                            </TabsTrigger>
+                            <TabsTrigger value="recordings" className="flex items-center gap-1.5">
+                                <Microphone className="size-3.5" />
+                                Recordings
+                            </TabsTrigger>
+                            <TabsTrigger value="linked-tasks" className="flex items-center gap-1.5">
+                                <ListChecks className="size-3.5" />
+                                Linked Tasks
+                            </TabsTrigger>
+                            <TabsTrigger value="attachments" className="flex items-center gap-1.5">
+                                <Paperclip className="size-3.5" />
+                                Attachments
+                            </TabsTrigger>
+                        </TabsList>
 
-                    {/* Attachments — collapsible, same pattern as other artifacts */}
-                    <AttachmentsArtifact
-                        meetingId={meetingId}
-                        sessionId={sessionId}
-                        sessionAttachments={sessionAttachments}
-                        uploadMutation={uploadSessionAttachment}
-                        deleteMutation={deleteSessionAttachment}
-                    />
-                </CardContent>
+                        <CardContent className="pt-4">
+                            <TabsContent value="analysis">
+                                <AnalysisTab
+                                    meetingId={meetingId}
+                                    sessionId={sessionId}
+                                />
+                            </TabsContent>
+                            <TabsContent value="transcript">
+                                <TranscriptTab
+                                    meetingId={meetingId}
+                                    sessionId={sessionId}
+                                />
+                            </TabsContent>
+                            <TabsContent value="recordings">
+                                <RecordingsTab
+                                    meetingId={meetingId}
+                                    sessionId={sessionId}
+                                />
+                            </TabsContent>
+                            <TabsContent value="linked-tasks">
+                                <LinkedTasksPanel
+                                    meetingId={meetingId}
+                                    sessionId={sessionId}
+                                />
+                            </TabsContent>
+                            <TabsContent value="attachments">
+                                <AttachmentsTab
+                                    meetingId={meetingId}
+                                    sessionId={sessionId}
+                                    sessionAttachments={sessionAttachments}
+                                    uploadMutation={uploadSessionAttachment}
+                                    deleteMutation={deleteSessionAttachment}
+                                />
+                            </TabsContent>
+                        </CardContent>
+                    </Tabs>
+                </CardHeader>
             </Card>
         </div>
     )

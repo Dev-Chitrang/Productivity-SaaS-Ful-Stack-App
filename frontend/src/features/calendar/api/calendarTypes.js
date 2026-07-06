@@ -17,6 +17,7 @@ export const EventType = Object.freeze({
     PERSONAL: "PERSONAL",
     MEETING: "MEETING",
     REMINDER: "REMINDER",
+    TASK: "TASK",
 })
 
 /** @enum {string} — matches backend EventColor */
@@ -54,6 +55,7 @@ export const EVENT_TYPE_LABELS = {
     PERSONAL: "Personal",
     MEETING: "Meeting",
     REMINDER: "Reminder",
+    TASK: "Task",
 }
 
 /** @type {Record<string, string>} */
