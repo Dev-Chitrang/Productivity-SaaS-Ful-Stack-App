@@ -9,7 +9,13 @@ from app.modules.attachments.dependencies import (
     get_current_user_id,
 )
 from app.modules.attachments.enums import AttachmentEntityType
-from app.modules.attachments.schemas import AttachmentListResponse, AttachmentResponse
+from app.modules.attachments.schemas import (
+    AttachmentListResponse,
+    AttachmentResponse,
+    ConfirmUploadRequest,
+    PresignedUploadRequest,
+    PresignedUploadResponse,
+)
 from app.modules.attachments.service import AttachmentService
 
 from app.core.rate_limit import RateLimiter
@@ -40,6 +46,52 @@ async def upload_attachment_endpoint(
         entity_type=entity_type,
         entity_id=entity_id,
         file=file,
+    )
+
+
+@router.post(
+    "/presigned-upload",
+    status_code=status.HTTP_200_OK,
+    response_model=PresignedUploadResponse,
+    summary="Generate a presigned URL for direct-to-S3 upload",
+    dependencies=[Depends(RateLimiter(10, 60, "file_upload"))],
+)
+async def create_presigned_upload_endpoint(
+    payload: PresignedUploadRequest,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service: AttachmentService = Depends(get_attachment_service),
+):
+    ctrl = AttachmentController(service)
+    return await ctrl.create_presigned_upload(
+        owner_user_id=current_user_id,
+        entity_type=payload.entity_type,
+        entity_id=payload.entity_id,
+        filename=payload.filename,
+        content_type=payload.content_type,
+    )
+
+
+@router.post(
+    "/confirm-upload",
+    status_code=status.HTTP_201_CREATED,
+    response_model=AttachmentResponse,
+    summary="Confirm a direct-to-S3 upload and store metadata",
+    dependencies=[Depends(RateLimiter(10, 60, "file_upload"))],
+)
+async def confirm_upload_endpoint(
+    payload: ConfirmUploadRequest,
+    current_user_id: UUID = Depends(get_current_user_id),
+    service: AttachmentService = Depends(get_attachment_service),
+):
+    ctrl = AttachmentController(service)
+    return await ctrl.confirm_presigned_upload(
+        owner_user_id=current_user_id,
+        entity_type=payload.entity_type,
+        entity_id=payload.entity_id,
+        key=payload.key,
+        original_filename=payload.original_filename,
+        content_type=payload.content_type,
+        size=payload.size,
     )
 
 
@@ -78,7 +130,7 @@ async def get_attachment_metadata_endpoint(
 @router.get(
     "/{attachment_id}/download",
     response_class=FileResponse,
-    summary="Download an attachment file",
+    summary="Download an attachment file (redirects to presigned URL for S3)",
     dependencies=[Depends(RateLimiter(60, 60, "general_get"))],
 )
 async def download_attachment_endpoint(

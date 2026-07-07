@@ -1,9 +1,6 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
 from celery import Celery
 from app.core.config import settings
+from app.core.providers import get_email_provider
 
 celery_app = Celery("productivity_tasks", broker=settings.REDIS_CELERY_BROKER_URL)
 
@@ -14,63 +11,27 @@ celery_app.conf.beat_schedule = {
     },
 }
 
+def _email_provider():
+    return get_email_provider()
+
 @celery_app.task(
     name="tasks.send_async_email",
-    autoretry_for=(smtplib.SMTPException,),
+    autoretry_for=(Exception,),
     retry_backoff=True,
     max_retries=3
 )
 def send_async_email(recipient: str, subject: str, body: str):
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = settings.SMTP_FROM_EMAIL
-    msg["To"] = recipient
-
-    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-        # 1. Handle TLS securely if required
-        if settings.SMTP_USE_TLS:
-            server.starttls()
-
-        # 2. Always attempt to authenticate outside the TLS condition if credentials exist
-        if settings.SMTP_USER and settings.SMTP_PASSWORD:
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-
-        server.sendmail(msg["From"], [recipient], msg.as_string())
+    _email_provider().send(recipient, subject, body)
 
 
 @celery_app.task(
     name="tasks.send_html_email",
-    autoretry_for=(smtplib.SMTPException,),
+    autoretry_for=(Exception,),
     retry_backoff=True,
     max_retries=3
 )
 def send_html_email(recipient: str, subject: str, html_body: str, text_body: str | None = None, attachments: list | None = None):
-    body = MIMEMultipart("alternative")
-    body.attach(MIMEText(text_body or html_body, "plain"))
-    body.attach(MIMEText(html_body, "html"))
-
-    if attachments:
-        msg = MIMEMultipart("mixed")
-        msg.attach(body)
-        for att in attachments:
-            content_type = att.get("content_type", "application/octet-stream")
-            subtype = content_type.split("/")[-1] if "/" in content_type else "octet-stream"
-            part = MIMEApplication(att["content"], _subtype=subtype)
-            part.add_header("Content-Disposition", "attachment", filename=att["filename"])
-            msg.attach(part)
-    else:
-        msg = body
-
-    msg["Subject"] = subject
-    msg["From"] = settings.SMTP_FROM_EMAIL
-    msg["To"] = recipient
-
-    with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-        if settings.SMTP_USE_TLS:
-            server.starttls()
-        if settings.SMTP_USER and settings.SMTP_PASSWORD:
-            server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-        server.sendmail(msg["From"], [recipient], msg.as_string())
+    _email_provider().send_html(recipient, subject, html_body, text_body, attachments)
 
 
 @celery_app.task(name="tasks.process_all_reminders")
@@ -166,6 +127,7 @@ def analyze_meeting_transcript(session_id_str: str):
     from uuid import UUID
     from app.core.database import async_session_factory
     from app.core.logger import logger
+    from app.core.providers import get_storage_service
     from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysisRepository, MeetingSessionRepository
     from app.modules.meetings.ai_provider_service import AIProviderService
     from app.modules.meetings.service import MeetingAIAnalysisService
@@ -179,6 +141,7 @@ def analyze_meeting_transcript(session_id_str: str):
             meeting_repo = MeetingRepository(session)
             session_repo = MeetingSessionRepository(session)
             ai_repo = MeetingAIAnalysisRepository(session)
+            storage_svc = get_storage_service("meetings")
 
             meeting_session = await session_repo.get_by_id(session_id)
             if not meeting_session:
@@ -204,10 +167,8 @@ def analyze_meeting_transcript(session_id_str: str):
             transcript_text = ""
             tx_path = transcripts[0].storage_path
             try:
-                def read_file():
-                    with open(tx_path, 'r', encoding='utf-8') as f:
-                        return f.read()
-                transcript_text = await asyncio.to_thread(read_file)
+                raw = await storage_svc.read(tx_path)
+                transcript_text = raw.decode("utf-8")
                 logger.info(f"Transcript file loaded: {tx_path} ({len(transcript_text)} chars)")
             except Exception as e:
                 logger.error(f"Failed to read transcript file {tx_path}: {e}")
@@ -241,7 +202,7 @@ def analyze_meeting_transcript(session_id_str: str):
                 logger.info(f"AI analysis completed for session {session_id}")
 
             logger.info(f"Starting completion email dispatch for session {session_id}")
-            completion_service = MeetingCompletionService(session)
+            completion_service = MeetingCompletionService(session, storage=storage_svc)
             await completion_service.send_completion_email(session_id)
             logger.info(f"Completion email dispatch completed for session {session_id}")
 

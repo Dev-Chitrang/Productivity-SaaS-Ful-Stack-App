@@ -138,8 +138,31 @@ class StorageProvider(abc.ABC):
     def exists(self, storage_path: str) -> bool:
         ...
 
+    async def read(self, storage_path: str) -> bytes:
+        raise NotImplementedError
+
+    @abc.abstractmethod
+    async def get_download_response(self, storage_path: str) -> dict:
+        """
+        Return download target information.
+        Returns {'url': str|None, 'path': str|None}.
+        """
+        ...
+
+    async def create_upload(self, key: str, content_type: str) -> dict:
+        raise NotImplementedError(
+            "This provider does not support presigned client uploads."
+        )
+
+    async def confirm_upload(self, key: str) -> dict:
+        raise NotImplementedError(
+            "This provider does not support presigned client uploads."
+        )
+
 
 class LocalStorageProvider(StorageProvider):
+    provider_name = "local"
+
     def __init__(self, base_dir: str):
         self.base_dir = base_dir
 
@@ -208,6 +231,165 @@ class LocalStorageProvider(StorageProvider):
     def exists(self, storage_path: str) -> bool:
         return os.path.exists(storage_path)
 
+    async def read(self, storage_path: str) -> bytes:
+        async with aiofiles.open(storage_path, "rb") as f:
+            return await f.read()
+
+    async def get_download_response(self, storage_path: str) -> dict:
+        return {"url": None, "path": storage_path}
+
+
+class S3StorageProvider(StorageProvider):
+    provider_name = "s3"
+
+    def __init__(self):
+        import boto3
+        self._client = boto3.client(
+            "s3",
+            region_name=settings.AWS_REGION,
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        )
+        self._bucket = settings.AWS_STORAGE_BUCKET_NAME
+
+    def _key(self, session_id: UUID, subfolder: str, stored_filename: str) -> str:
+        return f"{session_id}/{subfolder}/{stored_filename}"
+
+    def _key_from_path(self, relative_dir: str, stored_filename: str) -> str:
+        return f"{relative_dir}/{stored_filename}"
+
+    async def save(
+        self,
+        session_id: UUID,
+        subfolder: str,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict:
+        import aioboto3
+        safe_filename = f"{os.urandom(4).hex()}_{filename}"
+        key = self._key(session_id, subfolder, safe_filename)
+
+        session = aioboto3.Session(
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_REGION,
+        )
+        async with session.client("s3") as s3:
+            await s3.put_object(
+                Bucket=self._bucket,
+                Key=key,
+                Body=content,
+                ContentType=content_type,
+            )
+
+        return {
+            "storage_path": key,
+            "size": len(content),
+            "filename": filename,
+            "stored_filename": safe_filename,
+        }
+
+    async def save_to_path(
+        self,
+        relative_dir: str,
+        filename: str,
+        content: bytes,
+        content_type: str,
+    ) -> dict:
+        import aioboto3
+        stored_filename = f"{os.urandom(4).hex()}_{filename}"
+        key = self._key_from_path(relative_dir, stored_filename)
+
+        session = aioboto3.Session(
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_REGION,
+        )
+        async with session.client("s3") as s3:
+            await s3.put_object(
+                Bucket=self._bucket,
+                Key=key,
+                Body=content,
+                ContentType=content_type,
+            )
+
+        return {
+            "storage_path": key,
+            "size": len(content),
+            "filename": filename,
+            "stored_filename": stored_filename,
+        }
+
+    async def delete(self, storage_path: str) -> bool:
+        try:
+            await self._async_delete(storage_path)
+            return True
+        except Exception:
+            return False
+
+    async def _async_delete(self, key: str) -> None:
+        import aioboto3
+        session = aioboto3.Session(
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_REGION,
+        )
+        async with session.client("s3") as s3:
+            await s3.delete_object(Bucket=self._bucket, Key=key)
+
+    def get_absolute_path(self, storage_path: str) -> str:
+        return f"s3://{self._bucket}/{storage_path}"
+
+    def exists(self, storage_path: str) -> bool:
+        try:
+            self._client.head_object(Bucket=self._bucket, Key=storage_path)
+            return True
+        except Exception:
+            return False
+
+    async def read(self, storage_path: str) -> bytes:
+        import aioboto3
+        session = aioboto3.Session(
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_REGION,
+        )
+        async with session.client("s3") as s3:
+            response = await s3.get_object(Bucket=self._bucket, Key=storage_path)
+            return await response["Body"].read()
+
+    async def create_upload(self, key: str, content_type: str) -> dict:
+        url = self._client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": self._bucket,
+                "Key": key,
+                "ContentType": content_type,
+            },
+            ExpiresIn=3600,
+        )
+        return {"upload_url": url, "key": key, "expires_in": 3600}
+
+    async def confirm_upload(self, key: str) -> dict:
+        import aioboto3
+        session = aioboto3.Session(
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_REGION,
+        )
+        async with session.client("s3") as s3:
+            response = await s3.head_object(Bucket=self._bucket, Key=key)
+            return {"storage_path": key, "size": response["ContentLength"]}
+
+    async def get_download_response(self, storage_path: str) -> dict:
+        url = self._client.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": self._bucket, "Key": storage_path},
+            ExpiresIn=3600,
+        )
+        return {"url": url, "path": None}
+
 
 class StorageService:
     def __init__(self, provider: StorageProvider):
@@ -272,3 +454,19 @@ class StorageService:
 
     def exists(self, storage_path: str) -> bool:
         return self._provider.exists(storage_path)
+
+    @property
+    def provider_name(self) -> str:
+        return self._provider.provider_name
+
+    async def read(self, storage_path: str) -> bytes:
+        return await self._provider.read(storage_path)
+
+    async def create_upload(self, key: str, content_type: str) -> dict:
+        return await self._provider.create_upload(key, content_type)
+
+    async def confirm_upload(self, key: str) -> dict:
+        return await self._provider.confirm_upload(key)
+
+    async def get_download_response(self, storage_path: str) -> dict:
+        return await self._provider.get_download_response(storage_path)

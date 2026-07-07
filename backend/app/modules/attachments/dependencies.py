@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.storage import LocalStorageProvider, StorageService
+from app.core.providers import get_storage_service
 from app.modules.attachments.repository import AttachmentRepository
 from app.modules.attachments.service import AttachmentService
 
@@ -36,8 +36,7 @@ def get_current_user_id(
 
 
 def get_attachment_storage() -> StorageService:
-    provider = LocalStorageProvider(settings.attachment_storage)
-    return StorageService(provider)
+    return get_storage_service("attachments")
 
 
 async def get_attachment_service(

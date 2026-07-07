@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.storage import LocalStorageProvider, StorageService
+from app.core.providers import get_storage_service
 from app.modules.calender.repository import CalendarRepository
 from app.modules.calender.service import CalendarService
 from app.modules.attachments.repository import AttachmentRepository
@@ -34,8 +34,7 @@ async def get_attachment_service(db: AsyncSession = Depends(get_db)) -> Attachme
     Assembles the AttachmentService scoped to the calendar module storage base directory.
     """
     repo = AttachmentRepository(db)
-    provider = LocalStorageProvider(settings.attachment_storage)
-    storage = StorageService(provider)
+    storage = get_storage_service("attachments")
     return AttachmentService(repo, storage)
 
 
