@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Celery Configuration
     REDIS_CELERY_BROKER_URL: str
 
-    # SMTP Configuration
+    # SMTP Configuration (used by SMTPEmailProvider in LOCAL)
     SMTP_HOST: str
     SMTP_PORT: int
     SMTP_USE_TLS: bool
@@ -42,6 +42,16 @@ class Settings(BaseSettings):
 
     NVIDIA_NIM_API_KEY: str
     NVIDIA_NIM_TIMEOUT: int = 300
+
+    # Brevo / SendinBlue (used by BrevoEmailProvider in PRODUCTION)
+    BREVO_API_KEY: str = ""
+    BREVO_FROM_EMAIL: str = ""
+
+    # AWS S3 (used by S3StorageProvider in PRODUCTION)
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_REGION: str = ""
+    AWS_STORAGE_BUCKET_NAME: str = ""
 
     @property
     def async_database_url(self) -> str:
@@ -62,7 +72,7 @@ class Settings(BaseSettings):
     @field_validator("ENVIRONMENT")
     @classmethod
     def validate_environment(cls, v: str) -> str:
-        valid_envs = ["development", "testing", "production"]
+        valid_envs = ["LOCAL", "PRODUCTION", "TESTING"]
         if v not in valid_envs:
            raise ValueError(f"ENVIRONMENT must be one of {valid_envs}")
         return v

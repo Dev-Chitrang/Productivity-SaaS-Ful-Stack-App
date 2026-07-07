@@ -1,4 +1,3 @@
-import asyncio
 from typing import List, Optional, Sequence
 from uuid import UUID
 from datetime import datetime
@@ -6,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logger import logger
+from app.core.storage import StorageService
 from app.models.meetings import Meeting, MeetingSession, MeetingRecording, MeetingTranscript, MeetingAIAnalysis, MeetingInvitation
 from app.models.user import User
 from app.modules.meetings.enums import AIAnalysisStatus
@@ -13,10 +13,11 @@ from app.modules.meetings.repository import MeetingRepository, MeetingAIAnalysis
 
 
 class MeetingCompletionService:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, storage: StorageService):
         self.meeting_repo = MeetingRepository(session)
         self.session_repo = MeetingSessionRepository(session)
         self.ai_repo = MeetingAIAnalysisRepository(session)
+        self.storage = storage
 
     async def send_completion_email(self, session_id: UUID) -> None:
         meeting_session = await self.session_repo.get_by_id(session_id)
@@ -126,10 +127,7 @@ class MeetingCompletionService:
 
         for tx in transcripts:
             try:
-                def _read_bytes():
-                    with open(tx.storage_path, 'rb') as f:
-                        return f.read()
-                content = await asyncio.to_thread(_read_bytes)
+                content = await self.storage.read(tx.storage_path)
                 attachments.append({
                     "filename": tx.filename,
                     "content": content,
@@ -140,10 +138,7 @@ class MeetingCompletionService:
 
         for rec in recordings:
             try:
-                def _read_bytes():
-                    with open(rec.storage_path, 'rb') as f:
-                        return f.read()
-                content = await asyncio.to_thread(_read_bytes)
+                content = await self.storage.read(rec.storage_path)
                 attachments.append({
                     "filename": rec.filename,
                     "content": content,

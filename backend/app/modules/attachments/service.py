@@ -143,13 +143,92 @@ class AttachmentService:
                 "content_type": detected_content_type,
                 "extension": extension,
                 "size": result["size"],
-                "storage_provider": "local",
+                "storage_provider": self.storage.provider_name,
                 "storage_path": result["storage_path"],
             }
         )
         return record
 
-    # ── Download / metadata ───────────────────────────────────────────────────
+    # ── Presigned upload (direct-to-S3 flow) ────────────────────────────────
+
+    async def create_presigned_upload(
+        self,
+        owner_user_id: UUID,
+        entity_type: AttachmentEntityType,
+        entity_id: UUID,
+        filename: str,
+        content_type: str,
+    ) -> dict:
+        original_filename = _sanitise_filename(filename)
+        extension = _extract_extension(original_filename)
+        if not extension:
+            raise AttachmentValidationError("The uploaded file must have a recognisable extension.")
+
+        stored_filename = f"{os.urandom(4).hex()}_{original_filename}"
+        entity_dir = ENTITY_STORAGE_DIRS[entity_type]
+        key = f"{entity_dir}/{entity_id}/{stored_filename}"
+
+        result = await self.storage.create_upload(key, content_type)
+
+        return {
+            "upload_url": result["upload_url"],
+            "key": result["key"],
+            "expires_in": result["expires_in"],
+        }
+
+    async def confirm_presigned_upload(
+        self,
+        owner_user_id: UUID,
+        entity_type: AttachmentEntityType,
+        entity_id: UUID,
+        key: str,
+        original_filename: str,
+        content_type: str,
+        size: int,
+    ) -> Attachment:
+        stored_filename = key.split("/")[-1]
+        extension = _extract_extension(original_filename)
+
+        result = await self.storage.confirm_upload(key)
+
+        record = await self.repo.create(
+            {
+                "owner_user_id": owner_user_id,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "original_filename": original_filename,
+                "stored_filename": stored_filename,
+                "content_type": content_type,
+                "extension": extension,
+                "size": result["size"],
+                "storage_provider": self.storage.provider_name,
+                "storage_path": result["storage_path"],
+            }
+        )
+        return record
+
+    # ── Download ────────────────────────────────────────────────────────────
+
+    async def get_download_response(
+        self, attachment_id: UUID, owner_user_id: UUID
+    ) -> dict:
+        """
+        Return download target info for the controller, including both
+        the storage-level download target and attachment metadata.
+        Returns {'url': str|None, 'path': str|None, 'content_type': str, 'original_filename': str}.
+        """
+        attachment = await self._fetch_and_authorise(attachment_id, owner_user_id)
+        if not self.storage.exists(attachment.storage_path):
+            raise AttachmentNotFoundException(attachment_id)
+        download = await self.storage.get_download_response(attachment.storage_path)
+        return {
+            "url": download["url"],
+            "path": download["path"],
+            "content_type": attachment.content_type,
+            "original_filename": attachment.original_filename,
+        }
+
+    # ── Metadata ─────────────────────────────────────────────────────────────
 
     async def get_metadata(
         self, attachment_id: UUID, owner_user_id: UUID

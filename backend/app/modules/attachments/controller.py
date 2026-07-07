@@ -2,7 +2,7 @@ from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from app.modules.attachments.enums import AttachmentEntityType
 from app.modules.attachments.exceptions import (
@@ -11,7 +11,11 @@ from app.modules.attachments.exceptions import (
     AttachmentStorageError,
     AttachmentValidationError,
 )
-from app.modules.attachments.schemas import AttachmentListResponse, AttachmentResponse
+from app.modules.attachments.schemas import (
+    AttachmentListResponse,
+    AttachmentResponse,
+    PresignedUploadResponse,
+)
 from app.modules.attachments.service import AttachmentService
 
 
@@ -58,18 +62,70 @@ class AttachmentController:
 
     async def download(
         self, attachment_id: UUID, owner_user_id: UUID
-    ) -> FileResponse:
+    ):
         try:
-            attachment = await self.service.get_for_download(attachment_id, owner_user_id)
+            result = await self.service.get_download_response(attachment_id, owner_user_id)
+            if result["url"]:
+                return RedirectResponse(url=result["url"])
             return FileResponse(
-                path=attachment.storage_path,
-                media_type=attachment.content_type,
-                filename=attachment.original_filename,
+                path=result["path"],
+                media_type=result["content_type"],
+                filename=result["original_filename"],
             )
         except AttachmentNotFoundException as exc:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
         except AttachmentAccessDeniedException as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
+    async def create_presigned_upload(
+        self,
+        owner_user_id: UUID,
+        entity_type: AttachmentEntityType,
+        entity_id: UUID,
+        filename: str,
+        content_type: str,
+    ) -> PresignedUploadResponse:
+        try:
+            result = await self.service.create_presigned_upload(
+                owner_user_id=owner_user_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                filename=filename,
+                content_type=content_type,
+            )
+            return PresignedUploadResponse(**result)
+        except AttachmentStorageError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            )
+
+    async def confirm_presigned_upload(
+        self,
+        owner_user_id: UUID,
+        entity_type: AttachmentEntityType,
+        entity_id: UUID,
+        key: str,
+        original_filename: str,
+        content_type: str,
+        size: int,
+    ) -> AttachmentResponse:
+        try:
+            attachment = await self.service.confirm_presigned_upload(
+                owner_user_id=owner_user_id,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                key=key,
+                original_filename=original_filename,
+                content_type=content_type,
+                size=size,
+            )
+            return AttachmentResponse.model_validate(attachment)
+        except AttachmentStorageError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            )
 
     async def list_for_entity(
         self,
