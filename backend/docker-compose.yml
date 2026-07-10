@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  # 1. Redis Engine: Cache, Session Whitelists, and Celery Broker
+  redis:
+    image: redis:7.2-alpine
+    container_name: saas_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: always
+
+  # 2. Mailpit: Transactional Mock SMTP catching server
+  mailpit:
+    image: axllent/mailpit:v1.15
+    container_name: saas_mailpit
+    ports:
+      - "1025:1025" # SMTP server port (Backend connects here)
+      - "8025:8025" # Web UI port (You view emails here)
+    restart: always
+
+volumes:
+  redis_data:

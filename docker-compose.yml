@@ -1,24 +1,184 @@
-version: '3.8'
+# =============================================================================
+# Productivity App — Docker Compose
+# Start everything:  docker compose up -d
+# =============================================================================
 
 services:
-  # 1. Redis Engine: Cache, Session Whitelists, and Celery Broker
+
+  # ---------------------------------------------------------------------------
+  # Frontend — React SPA served by nginx
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    container_name: saas_frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - frontend_net
+      - backend_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/nginx-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Backend — FastAPI + Uvicorn
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: saas_backend
+    container_name: saas_backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend_net
+    volumes:
+      - logs_data:/app/logs
+      - uploads_data:/app/downloads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # Celery Worker + Beat — shares Backend image
+  # ---------------------------------------------------------------------------
+  celery:
+    image: saas_backend
+    container_name: saas_celery
+    entrypoint: ["/app/celery_entrypoint.sh"]
+    env_file: .env
+    depends_on:
+      backend:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - backend_net
+    volumes:
+      - logs_data:/app/logs
+      - uploads_data:/app/downloads
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "celery", "-A", "app.workers.tasks.celery_app", "inspect", "ping", "--timeout=5"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — primary data store
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: saas_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-productivity_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-productivity_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Redis — cache, session store, Celery broker
+  # ---------------------------------------------------------------------------
   redis:
     image: redis:7.2-alpine
     container_name: saas_redis
+    command: redis-server --appendonly yes
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    restart: always
+    networks:
+      - backend_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
-  # 2. Mailpit: Transactional Mock SMTP catching server
+  # ---------------------------------------------------------------------------
+  # Mailpit — local SMTP catcher (LOCAL environment only)
+  # ---------------------------------------------------------------------------
   mailpit:
     image: axllent/mailpit:v1.15
     container_name: saas_mailpit
     ports:
-      - "1025:1025" # SMTP server port (Backend connects here)
-      - "8025:8025" # Web UI port (You view emails here)
-    restart: always
+      - "1025:1025"
+      - "8025:8025"
+    volumes:
+      - mailpit_data:/data
+    networks:
+      - backend_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  backend_net:
+    driver: bridge
+    name: saas_backend_net
+  frontend_net:
+    driver: bridge
+    name: saas_frontend_net
+
+
+# =============================================================================
+# Volumes
+# =============================================================================
 volumes:
+  postgres_data:
+    name: saas_postgres_data
   redis_data:
+    name: saas_redis_data
+  mailpit_data:
+    name: saas_mailpit_data
+  logs_data:
+    name: saas_logs_data
+  uploads_data:
+    name: saas_uploads_data

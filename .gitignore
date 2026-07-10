@@ -9,7 +9,6 @@ dist/
 build/
 
 # Backend specific
-backend/migrations/
 __pycache__/
 
 # IDE
@@ -18,5 +17,6 @@ __pycache__/
 
 .env
 app.log
-alembic.ini
 downloads/
+.env.local
+.env.*.local
