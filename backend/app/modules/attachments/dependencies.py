@@ -1,4 +1,5 @@
 from uuid import UUID
+from app.core.storage import StorageService
 
 import jwt
 from fastapi import Depends, HTTPException, status

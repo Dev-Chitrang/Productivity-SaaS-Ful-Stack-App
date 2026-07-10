@@ -1,0 +1,54 @@
+# =============================================================================
+# .dockerignore — exclude everything not needed in the production image
+# =============================================================================
+
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist/
+build/
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE / editor
+.vscode
+.idea
+*.swp
+*.swo
+
+# Environment files — secrets are injected at runtime, never baked into images
+.env
+.env.*
+example.env
+
+# Tests & coverage (not needed in production)
+tests
+.pytest_cache
+.coverage
+coverage.xml
+
+# Logs & uploads (ephemeral runtime data)
+logs/
+downloads/
+
+# Docker & CI config (not part of the app)
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Documentation
+*.md
+LICENSE
+
+# OS artifacts
+.DS_Store
+Thumbs.db
