@@ -139,9 +139,8 @@ function MeetingDetailPage() {
     !isScheduled ||
     meeting?.can_join === true ||
     (meeting?.can_join !== false &&
-      (!meeting?.scheduled_date ||
-        !meeting?.scheduled_time ||
-        new Date() >= new Date(`${meeting.scheduled_date}T${meeting.scheduled_time}`)))
+      (!meeting?.scheduled_start ||
+        new Date() >= new Date(meeting.scheduled_start)))
 
   const showJoin =
     (isActive || isCreated || isIdle || (!isScheduled && isEnded)) && canJoinScheduled

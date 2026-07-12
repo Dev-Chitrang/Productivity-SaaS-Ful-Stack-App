@@ -40,4 +40,4 @@ echo "==> [Celery] Running database migrations (alembic upgrade head)..."
 alembic upgrade head
 
 echo "==> [Celery] Starting Celery Worker with Beat..."
-exec celery -A app.workers.tasks.celery_app worker --beat --loglevel=info
+exec python start_celery.py

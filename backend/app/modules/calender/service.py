@@ -23,7 +23,7 @@ class CalendarService:
     # CRUD
     # ------------------------------------------------------------------
 
-    async def create_event(self, user_id: UUID, payload: CalendarEventCreate) -> CalendarEvent:
+    async def create_event(self, user_id: UUID, payload: CalendarEventCreate, user_timezone: Optional[str] = None) -> CalendarEvent:
         now = datetime.now(timezone.utc)
         if payload.start_time < now:
             raise CalendarValidationError(
@@ -33,7 +33,11 @@ class CalendarService:
             raise CalendarValidationError(
                 "Event start time must be before end time."
             )
-        return await self.repo.create(user_id, payload.model_dump())
+        data = payload.model_dump()
+        # Resolve timezone: explicit in payload → user profile timezone → UTC fallback
+        if not data.get("timezone"):
+            data["timezone"] = user_timezone or "UTC"
+        return await self.repo.create(user_id, data)
 
     async def get_event(self, user_id: UUID, event_id: UUID) -> CalendarEvent:
         event = await self.repo.get_by_id(event_id)

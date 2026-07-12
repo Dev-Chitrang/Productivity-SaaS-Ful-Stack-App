@@ -21,35 +21,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { updateMeetingSchema } from "../schemas/meetingSchema"
 import { useUpdateMeeting } from "../hooks/useMeetingsApi"
-import { CalendarBlank, Clock, Globe, Note, Robot } from "@phosphor-icons/react"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-
-const COMMON_TIMEZONES = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Anchorage",
-  "Pacific/Honolulu",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Moscow",
-  "Asia/Dubai",
-  "Asia/Kolkata",
-  "Asia/Shanghai",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-]
+import { Note, Robot, CalendarBlank, Clock } from "@phosphor-icons/react"
+import { TimezoneField } from "@/components/TimezoneField"
 
 export function EditMeetingDialog({ meeting, open, onOpenChange }) {
   const [recording, setRecording] = useState(false)
@@ -213,24 +186,7 @@ export function EditMeetingDialog({ meeting, open, onOpenChange }) {
                     name="timezone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>
-                          <span className="inline-flex items-center gap-1">
-                            <Globe className="size-3" />
-                            Timezone
-                          </span>
-                        </FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select timezone" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {COMMON_TIMEZONES.map((tz) => (
-                              <SelectItem key={tz} value={tz}>{tz}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <TimezoneField value={field.value} onChange={field.onChange} />
                         <FormMessage />
                       </FormItem>
                     )}

@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     NVIDIA_NIM_API_KEY: str
     NVIDIA_NIM_TIMEOUT: int = 300
 
+    # VAPID (Web Push) Configuration
+    VAPID_PRIVATE_KEY: str = ""
+    VAPID_PUBLIC_KEY: str = ""
+
     # Brevo / SendinBlue (used by BrevoEmailProvider in PRODUCTION)
     BREVO_API_KEY: str = ""
     BREVO_FROM_EMAIL: str = ""

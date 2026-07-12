@@ -94,9 +94,8 @@ export const MEETING_TYPE_CLASSES = {
  * @property {string} updated_at
  * @property {string} [ended_at]
  * @property {string} [meeting_type]
- * @property {string} [scheduled_date]
- * @property {string} [scheduled_time]
- * @property {number} [duration]
+  * @property {string} [scheduled_start]
+  * @property {number} [duration]
  * @property {string} [timezone]
  * @property {string} [agenda]
  * @property {boolean} [enable_ai_analysis]

@@ -5,7 +5,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 
-from app.modules.calender.dependencies import get_current_user_id, get_calendar_service, get_attachment_service
+from app.modules.calender.dependencies import (
+    get_current_user_id,
+    get_current_user,
+    get_calendar_service,
+    get_attachment_service,
+)
 from app.modules.calender.controller import CalendarController
 from app.modules.calender.schema import (
     CalendarEventCreate,
@@ -24,6 +29,7 @@ from app.modules.attachments.exceptions import (
 )
 from app.modules.attachments.schemas import AttachmentListResponse, AttachmentResponse
 from app.modules.attachments.service import AttachmentService
+from app.models.user import User
 
 from app.core.rate_limit import RateLimiter
 
@@ -42,11 +48,13 @@ router = APIRouter(prefix="/calendar", tags=["Calendar Operations Management Eng
 )
 async def create_event_endpoint(
     payload: CalendarEventCreate,
-    current_user_id: UUID = Depends(get_current_user_id),
+    current_user: User = Depends(get_current_user),
     service=Depends(get_calendar_service),
 ):
     ctrl = CalendarController(service)
-    return await ctrl.create_user_event(current_user_id, payload)
+    return await ctrl.create_user_event(
+        current_user.id, payload, user_timezone=current_user.timezone
+    )
 
 
 @router.get(

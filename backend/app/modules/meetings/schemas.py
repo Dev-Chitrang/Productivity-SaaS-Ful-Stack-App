@@ -144,7 +144,8 @@ class ScheduledMeetingCreate(BaseModel):
     enable_ai_analysis: bool = False
     agenda: Optional[str] = None
     scheduled_start: datetime
-    timezone: str = Field(..., min_length=1, max_length=50)
+    # Optional — if omitted the host's profile timezone is used; falls back to UTC.
+    timezone: Optional[str] = Field(None, max_length=64)
     invitations: List[InvitationCreate] = Field(default_factory=list)
 
     @model_validator(mode="after")

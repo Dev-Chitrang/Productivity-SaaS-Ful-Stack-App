@@ -27,9 +27,11 @@ class CalendarController:
     # CRUD
     # ------------------------------------------------------------------
 
-    async def create_user_event(self, user_id: UUID, payload: CalendarEventCreate) -> CalendarEventResponse:
+    async def create_user_event(
+        self, user_id: UUID, payload: CalendarEventCreate, user_timezone: Optional[str] = None
+    ) -> CalendarEventResponse:
         try:
-            event = await self.service.create_event(user_id, payload)
+            event = await self.service.create_event(user_id, payload, user_timezone=user_timezone)
             return CalendarEventResponse.model_validate(event)
         except CalendarValidationError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

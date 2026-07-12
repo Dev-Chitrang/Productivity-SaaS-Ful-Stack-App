@@ -1,0 +1,3 @@
+export const LIST_STALE_TIME = 30_000
+export const UNREAD_POLL_INTERVAL = 30_000
+export const NOTIFICATION_PAGE_SIZE = 20
