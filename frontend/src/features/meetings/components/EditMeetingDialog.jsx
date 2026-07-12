@@ -21,17 +21,27 @@ import {
 import { Input } from "@/components/ui/input"
 import { updateMeetingSchema } from "../schemas/meetingSchema"
 import { useUpdateMeeting } from "../hooks/useMeetingsApi"
+import { Note, Robot, CalendarBlank, Clock } from "@phosphor-icons/react"
+import { TimezoneField } from "@/components/TimezoneField"
 
 export function EditMeetingDialog({ meeting, open, onOpenChange }) {
   const [recording, setRecording] = useState(false)
   const [transcript, setTranscript] = useState(false)
+  const [aiAnalysis, setAiAnalysis] = useState(false)
   const updateMeeting = useUpdateMeeting()
+  const isScheduled = meeting?.meeting_type === "SCHEDULED"
 
   const form = useForm({
     resolver: zodResolver(updateMeetingSchema),
     defaultValues: {
       title: "",
       description: "",
+      scheduled_date: "",
+      scheduled_time: "",
+      duration: "",
+      timezone: "",
+      agenda: "",
+      enable_ai_analysis: false,
     },
   })
 
@@ -40,9 +50,16 @@ export function EditMeetingDialog({ meeting, open, onOpenChange }) {
       form.reset({
         title: meeting.title || "",
         description: meeting.description || "",
+        scheduled_date: meeting.scheduled_date || "",
+        scheduled_time: meeting.scheduled_time || "",
+        duration: meeting.duration || "",
+        timezone: meeting.timezone || "",
+        agenda: meeting.agenda || "",
+        enable_ai_analysis: meeting.enable_ai_analysis || false,
       })
       setRecording(meeting.enable_recording || false)
       setTranscript(meeting.enable_transcript || false)
+      setAiAnalysis(meeting.enable_ai_analysis || false)
     }
   }, [meeting, form])
 
@@ -54,14 +71,15 @@ export function EditMeetingDialog({ meeting, open, onOpenChange }) {
         ...values,
         enable_recording: recording,
         enable_transcript: transcript,
+        enable_ai_analysis: aiAnalysis,
       })
       onOpenChange(false)
-    } catch {}
+    } catch { }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Meeting</DialogTitle>
           <DialogDescription>
@@ -99,6 +117,128 @@ export function EditMeetingDialog({ meeting, open, onOpenChange }) {
               )}
             />
 
+            {isScheduled && (
+              <div className="space-y-4 rounded border border-border p-3">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                  Schedule Details
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="scheduled_date"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          <span className="inline-flex items-center gap-1">
+                            <CalendarBlank className="size-3" />
+                            Date
+                          </span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input type="date" aria-label="Scheduled date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="scheduled_time"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="size-3" />
+                            Time
+                          </span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input type="time" aria-label="Scheduled time" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField
+                    control={form.control}
+                    name="duration"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="size-3" />
+                            Duration (min)
+                          </span>
+                        </FormLabel>
+                        <FormControl>
+                          <Input type="number" min="1" aria-label="Duration in minutes" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="timezone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <TimezoneField value={field.value} onChange={field.onChange} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="agenda"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        <span className="inline-flex items-center gap-1">
+                          <Note className="size-3" />
+                          Agenda (optional)
+                        </span>
+                      </FormLabel>
+                      <FormControl>
+                        <textarea
+                          aria-label="Meeting agenda"
+                          rows={3}
+                          placeholder="Topics to cover..."
+                          className="flex w-full rounded border border-border bg-transparent px-3 py-2 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={aiAnalysis}
+                    onChange={(e) => {
+                      const enabled = e.target.checked
+                      setAiAnalysis(enabled)
+                      if (enabled) {
+                        setTranscript(true)
+                      }
+                    }}
+                    className="size-3.5 accent-primary"
+                  />
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                    <Robot className="size-3" />
+                    Enable AI Analysis
+                  </span>
+                </label>
+              </div>
+            )}
+
             <div className="space-y-3">
               <FormLabel>Meeting Settings</FormLabel>
               <div className="space-y-2">
@@ -113,14 +253,15 @@ export function EditMeetingDialog({ meeting, open, onOpenChange }) {
                     Enable Recording
                   </span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className={`flex items-center gap-2 ${aiAnalysis ? "" : "cursor-pointer"}`}>
                   <input
                     type="checkbox"
                     checked={transcript}
+                    disabled={aiAnalysis}
                     onChange={(e) => setTranscript(e.target.checked)}
                     className="size-3.5 accent-primary"
                   />
-                  <span className="text-xs text-muted-foreground">
+                  <span className={`text-xs ${aiAnalysis ? "text-muted-foreground/50" : "text-muted-foreground"}`}>
                     Enable Transcript
                   </span>
                 </label>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react"
-import { useSearchParams } from "react-router-dom"
+import { useSearchParams, useNavigate } from "react-router-dom"
 import { CalendarToolbar } from "../components/CalendarToolbar"
 import { MonthGrid } from "../components/MonthGrid"
 import { WeekGrid } from "../components/WeekGrid"
@@ -11,6 +11,7 @@ import { DeleteConfirmationDialog } from "../components/DeleteConfirmationDialog
 import { FilterPanel } from "../components/FilterPanel"
 import { MonthViewSkeleton, WeekViewSkeleton, AgendaSkeleton } from "../components/LoadingSkeleton"
 import { useCalendarEvents, useDeleteEvent } from "../hooks/useCalendarApi"
+import { useTasks } from "@/features/tasks/hooks/useTasksApi"
 import { dayjs, toISODate, getViewDateRange } from "../utils/dateUtils"
 
 /** @typedef {"month"|"week"|"day"|"agenda"} CalendarView */
@@ -30,6 +31,7 @@ function navigateAnchor(view, anchorDate, direction) {
 
 export default function CalendarPage() {
     const [searchParams, setSearchParams] = useSearchParams()
+    const navigate = useNavigate()
 
     // Persist view + anchor date in the URL so browser back/forward works
     const view = /** @type {CalendarView} */ (searchParams.get("view") || "month")
@@ -78,6 +80,42 @@ export default function CalendarPage() {
 
     const { data: events = [], isLoading, isError } = useCalendarEvents(start, end, queryFilters)
 
+    const { data: tasksData } = useTasks({ archived: false })
+    const tasks = useMemo(() => tasksData?.tasks ?? [], [tasksData])
+
+    const mergedEvents = useMemo(() => {
+      const taskEvents = tasks
+        .filter((t) => t.due_date && !t.deleted_at)
+        .map((t) => {
+          const dueDay = dayjs(t.due_date)
+          const inRange = dueDay.isAfter(dayjs(start).subtract(1, "day")) && dueDay.isBefore(dayjs(end).add(1, "day"))
+          if (!inRange) return null
+          return {
+            __type: "task",
+            id: `task_${t.id}`,
+            title: t.title,
+            description: null,
+            event_type: "TASK",
+            color: t.priority === "HIGH" ? "RED" : t.priority === "LOW" ? "GREEN" : "PURPLE",
+            start_time: dueDay.startOf("day").format(),
+            end_time: dueDay.endOf("day").format(),
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+            is_all_day: true,
+            location: null,
+            is_recurring: false,
+            recurrence_frequency: null,
+            recurrence_interval: null,
+            recurrence_end_date: null,
+            task_id: t.id,
+          }
+        })
+        .filter(Boolean)
+
+      const meetingEvents = events.map((e) => ({ ...e, __type: "event" }))
+
+      return [...meetingEvents, ...taskEvents]
+    }, [events, tasks, start, end])
+
     const deleteMutation = useDeleteEvent(() => setDeleteTarget(null))
 
     // -----------------------------------------------------------------------
@@ -90,7 +128,13 @@ export default function CalendarPage() {
     // -----------------------------------------------------------------------
     // Event interactions
     // -----------------------------------------------------------------------
-    const handleEventClick = useCallback((event) => setDetailEvent(event), [])
+    const handleEventClick = useCallback((event) => {
+      if (event.__type === "task") {
+        navigate(`/tasks`)
+        return
+      }
+      setDetailEvent(event)
+    }, [navigate])
 
     const handleDayClick = useCallback((isoDate) => {
         if (view === "month") {
@@ -156,7 +200,7 @@ export default function CalendarPage() {
                 return (
                     <MonthGrid
                         anchorDate={anchorDate}
-                        events={events}
+                        events={mergedEvents}
                         onEventClick={handleEventClick}
                         onDayClick={handleDayClick}
                         onCreateEvent={handleCreateEvent}
@@ -166,7 +210,7 @@ export default function CalendarPage() {
                 return (
                     <WeekGrid
                         anchorDate={anchorDate}
-                        events={events}
+                        events={mergedEvents}
                         onEventClick={handleEventClick}
                         onSlotClick={handleSlotClick}
                     />
@@ -175,7 +219,7 @@ export default function CalendarPage() {
                 return (
                     <DayTimeline
                         anchorDate={anchorDate}
-                        events={events}
+                        events={mergedEvents}
                         onEventClick={handleEventClick}
                         onSlotClick={handleSlotClick}
                     />
@@ -183,7 +227,7 @@ export default function CalendarPage() {
             case "agenda":
                 return (
                     <AgendaList
-                        events={events}
+                        events={mergedEvents}
                         onEventClick={handleEventClick}
                         onCreateEvent={handleCreateEvent}
                     />

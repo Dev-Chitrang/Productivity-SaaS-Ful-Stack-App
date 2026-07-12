@@ -10,7 +10,6 @@ const fieldLabels = {
     description: "Description",
     due_date: "Due Date",
     labels: "Labels",
-    checklist: "Checklist",
     is_archived: "Archived",
     is_pinned: "Pinned",
     is_favorite: "Favorite",
@@ -90,6 +89,4 @@ export function isDueToday(dueDate) {
     return dayjs(dueDate).isSame(dayjs(), "day")
 }
 
-export function generateChecklistId() {
-    return `cl_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`
-}
+

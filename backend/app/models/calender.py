@@ -20,7 +20,7 @@ class CalendarEvent(Base):
 
     start_time = Column(DateTime(timezone=True), nullable=False)
     end_time = Column(DateTime(timezone=True), nullable=False)
-    timezone = Column(String(100), nullable=False, default="UTC")
+    timezone = Column(String(100), nullable=True, default=None)
     is_all_day = Column(Boolean, nullable=False, default=False)
     location = Column(String(500), nullable=True)
 

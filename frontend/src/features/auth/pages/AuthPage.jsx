@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { motion } from "framer-motion"
 import {
-  Mail, Lock, User, Eye, EyeOff, ArrowRight, Check, Sparkles, ArrowLeft,
+  Mail, Lock, User, Eye, EyeOff, ArrowRight, Check, Sparkles, ArrowLeft, AlertCircle,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ import {
   FormMessage,
 } from "@/components/ui/form"
 import { useLogin, useSignup, useGoogleOAuth } from "../hooks/useAuth"
+import { mapAuthError } from "../utils/authErrorMapper"
 import { useAuthContext } from "@/context/AuthContext"
 import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { GoogleButton, OrDivider } from "../components/GoogleButton"
@@ -203,7 +204,7 @@ function SignupForm({ onOtpSent, onLoginSuccess }) {
 // LoginForm
 // ---------------------------------------------------------------------------
 
-function LoginForm({ onOtpSent, onLoginSuccess, redirectUrl }) {
+function LoginForm({ onOtpSent, onLoginSuccess, redirectUrl, onSwitchToSignup }) {
   const { loginMutation } = useLogin({ redirectUrl })
   const [showPassword, setShowPassword] = useState(false)
 
@@ -211,6 +212,8 @@ function LoginForm({ onOtpSent, onLoginSuccess, redirectUrl }) {
     onOtpRequired: (token, mode) => onOtpSent(token, mode),
     onSuccess: onLoginSuccess,
   })
+
+  const mappedError = loginMutation.error ? mapAuthError(loginMutation.error) : null
 
   const form = useForm({
     resolver: zodResolver(loginSchema),
@@ -225,7 +228,12 @@ function LoginForm({ onOtpSent, onLoginSuccess, redirectUrl }) {
       } else if (data.access_token) {
         onLoginSuccess(data)
       }
-    } catch { }
+    } catch (error) {
+      const mapped = mapAuthError(error)
+      if (mapped?.clearPassword) {
+        form.setValue("password", "")
+      }
+    }
   }
 
   return (
@@ -272,6 +280,29 @@ function LoginForm({ onOtpSent, onLoginSuccess, redirectUrl }) {
               <FormMessage />
             </FormItem>
           )} />
+
+          {mappedError && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 size-4 text-destructive shrink-0" />
+                <div className="text-sm text-destructive">
+                  {mappedError.message.split("\n").map((line, i) => (
+                    <p key={i}>{line}</p>
+                  ))}
+                  {mappedError.action === "signup" && onSwitchToSignup && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); onSwitchToSignup() }}
+                      className="mt-2 text-sm font-medium underline underline-offset-2 hover:text-destructive/80"
+                    >
+                      Create an account to continue
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="text-right pt-1">
             <Link
               to="/forgot-password"
@@ -507,13 +538,16 @@ function AuthPage() {
       .finally(() => setMeetingLoading(false))
   }, [meetingIdParam])
 
-  async function handleGuestJoin(guestName) {
+  async function handleGuestJoin(guestName, guestEmail) {
     setJoinLoading(true)
     try {
-      const { data } = await meetingsApi.join(meetingIdParam, { guest_name: guestName })
-      saveGuestSession({ meetingId: meetingIdParam, guestName })
+      const payload = {}
+      if (guestName) payload.guest_name = guestName
+      if (guestEmail) payload.guest_email = guestEmail
+      const { data } = await meetingsApi.join(meetingIdParam, payload)
+      saveGuestSession({ meetingId: meetingIdParam, guestName, guestEmail })
       navigate(`/meetings/${meetingIdParam}/room`, {
-        state: { guestName, sessionToken: data.meeting_session_token },
+        state: { guestName, guestEmail, sessionToken: data.meeting_session_token },
       })
     } catch (err) {
       const detail = err?.response?.data?.detail
@@ -660,7 +694,7 @@ function AuthPage() {
                 Enter your credentials to access your account.
               </p>
             </div>
-            <LoginForm onOtpSent={handleOtpSent} onLoginSuccess={handleLoginSuccess} redirectUrl={redirectParam} />
+            <LoginForm onOtpSent={handleOtpSent} onLoginSuccess={handleLoginSuccess} redirectUrl={redirectParam} onSwitchToSignup={() => setActiveCard("signup")} />
             <p className="mt-6 text-center text-sm text-muted-foreground">
               Don&apos;t have an account?{" "}
               <button

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react"
 import { userApi } from "@/features/auth/services/authApi"
 import { clearGuestSession } from "@/features/meetings/utils/guestSession"
+import { getBrowserTimezone } from "@/lib/timezone"
 
 const AuthContext = createContext(null)
 
@@ -18,7 +19,22 @@ export function AuthProvider({ children }) {
     }
     try {
       const { data } = await userApi.getProfile()
-      setUser(data)
+
+      // One-time automatic timezone sync for existing and new users.
+      // If the backend returned null (no preference set yet), silently push
+      // the browser timezone. No toast, no user interaction required.
+      if (!data.timezone) {
+        const browserTz = getBrowserTimezone()
+        try {
+          const { data: updated } = await userApi.updateProfile({ timezone: browserTz })
+          setUser(updated)
+        } catch {
+          // Non-critical — set user with null timezone; fallback logic in forms handles it.
+          setUser(data)
+        }
+      } else {
+        setUser(data)
+      }
     } catch {
       localStorage.removeItem("access_token")
       localStorage.removeItem("refresh_token")

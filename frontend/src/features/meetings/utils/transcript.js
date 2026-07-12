@@ -95,8 +95,8 @@ export class TranscriptManager {
 
   getTranscriptText() {
     return this.transcriptEntries
-      .map((entry) => `[${new Date(entry.timestamp).toLocaleTimeString()}] ${entry.speaker}: ${entry.text}`)
-      .join("\n")
+      .map((entry) => entry.text)
+      .join("\n\n")
   }
 
   getBlob() {

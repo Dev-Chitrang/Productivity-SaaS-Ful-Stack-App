@@ -5,6 +5,9 @@ import {
   MEETING_STATUS_LABELS,
   MEETING_STATUS_CLASSES,
   MEETING_STATUS_DOTS,
+  MEETING_TYPE_LABELS,
+  MEETING_TYPE_CLASSES,
+  MeetingType,
 } from "../api/meetingTypes"
 import { ParticipantList } from "./ParticipantList"
 import {
@@ -14,6 +17,7 @@ import {
   Copy,
   Microphone,
   FileText,
+  Trash,
 } from "@phosphor-icons/react"
 import toast from "react-hot-toast"
 
@@ -25,6 +29,7 @@ export function MeetingDetails({
   onEnd,
   onCancel,
   onEdit,
+  onDelete,
 }) {
   const statusLabel = MEETING_STATUS_LABELS[meeting?.status] || ""
   const statusClass = MEETING_STATUS_CLASSES[meeting?.status] || ""
@@ -51,13 +56,23 @@ export function MeetingDetails({
       })
     : ""
 
+  const isScheduled = meeting?.meeting_type === MeetingType.SCHEDULED
   const isActive = meeting?.status === "ACTIVE"
   const isCreated = meeting?.status === "CREATED"
   const isIdle = meeting?.status === "IDLE"
   const isEnded = meeting?.status === "ENDED"
   const isCancelled = meeting?.status === "CANCELLED"
-  const canModify = isHost && (isCreated || isActive || isIdle)
-  const canEnd = isHost && (isActive || isIdle)
+  const status = meeting?.status
+
+  // INSTANT meeting actions
+  const showEndMeeting = isHost && isActive
+  const showCancelMeeting = isHost && isScheduled && (status === "SCHEDULED")
+  const showEditMeeting = isHost && isScheduled && (status === "SCHEDULED")
+  const showDeleteMeeting = isHost && (
+    (isScheduled && isEnded) ||
+    (!isScheduled && (isCreated || isIdle || isEnded)) ||
+    isCancelled
+  )
 
   return (
     <div className="space-y-6">
@@ -72,12 +87,21 @@ export function MeetingDetails({
                 </p>
               )}
             </div>
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-none border px-2 py-0.5 text-[10px] font-medium shrink-0 ${statusClass}`}
-            >
-              <span className={`size-1.5 rounded-full ${statusDot}`} />
-              {statusLabel}
-            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              {meeting?.meeting_type && (
+                <span
+                  className={`inline-flex items-center rounded-none border px-2 py-0.5 text-[10px] font-medium ${MEETING_TYPE_CLASSES[meeting.meeting_type] || ""}`}
+                >
+                  {MEETING_TYPE_LABELS[meeting.meeting_type] || meeting.meeting_type}
+                </span>
+              )}
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-none border px-2 py-0.5 text-[10px] font-medium shrink-0 ${statusClass}`}
+              >
+                <span className={`size-1.5 rounded-full ${statusDot}`} />
+                {statusLabel}
+              </span>
+            </div>
           </div>
         </CardHeader>
 
@@ -92,6 +116,61 @@ export function MeetingDetails({
               <p className="mt-0.5">{createdDate}</p>
             </div>
           </div>
+
+          {meeting?.meeting_type === "SCHEDULED" && (
+            <div className="rounded border border-border bg-muted/30 p-3 space-y-2">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+                Scheduled Meeting
+              </p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                {meeting.scheduled_start && (
+                  <div>
+                    <span className="text-muted-foreground">Scheduled Time</span>
+                    <p className="mt-0.5 font-medium">
+                      {new Date(meeting.scheduled_start).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                )}
+                {meeting.duration && (
+                  <div>
+                    <span className="text-muted-foreground">Duration</span>
+                    <p className="mt-0.5 font-medium">{meeting.duration} min</p>
+                  </div>
+                )}
+                {meeting.timezone && (
+                  <div>
+                    <span className="text-muted-foreground">Timezone</span>
+                    <p className="mt-0.5 font-medium">{meeting.timezone}</p>
+                  </div>
+                )}
+                {meeting.agenda && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Agenda</span>
+                    <p className="mt-0.5 whitespace-pre-wrap">{meeting.agenda}</p>
+                  </div>
+                )}
+                {meeting.invited_participants_count != null && meeting.invited_participants_count > 0 && (
+                  <div className="col-span-2">
+                    <span className="text-muted-foreground">Invited Participants</span>
+                    <p className="mt-0.5 font-medium">{meeting.invited_participants_count}</p>
+                  </div>
+                )}
+                {meeting.enable_ai_analysis && (
+                  <div className="col-span-2">
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      AI Analysis enabled
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -124,7 +203,7 @@ export function MeetingDetails({
               Copy Link
             </Button>
 
-            {canEnd && (
+            {showEndMeeting && (
               <Button
                 variant="destructive"
                 size="sm"
@@ -136,7 +215,19 @@ export function MeetingDetails({
               </Button>
             )}
 
-            {canModify && (
+            {showCancelMeeting && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onCancel}
+                aria-label="Cancel meeting"
+              >
+                <Prohibit className="size-3.5" />
+                Cancel Meeting
+              </Button>
+            )}
+
+            {showEditMeeting && (
               <Button
                 variant="ghost"
                 size="sm"
@@ -148,27 +239,37 @@ export function MeetingDetails({
               </Button>
             )}
 
-            {canModify && (
+            {showDeleteMeeting && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onCancel}
-                aria-label="Cancel meeting"
+                onClick={onDelete}
+                aria-label="Delete meeting"
               >
-                <Prohibit className="size-3.5" />
-                Cancel
+                <Trash className="size-3.5" />
+                Delete
               </Button>
             )}
-
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">
-            Participants ({(participants || []).filter((p) => p.status === "WAITING" || p.status === "ADMITTED").length || 0})
-          </CardTitle>
+          <div className="flex items-center gap-6">
+            <div>
+              <CardTitle className="text-sm">Participants</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {(participants || []).filter((p) => p.status === "WAITING" || p.status === "ADMITTED").length || 0}
+              </p>
+            </div>
+            <div>
+              <CardTitle className="text-sm">Invited Participants</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {meeting?.invited_participants_count ?? 0}
+              </p>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <ParticipantList

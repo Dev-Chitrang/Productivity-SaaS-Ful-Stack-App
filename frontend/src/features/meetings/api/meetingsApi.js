@@ -5,6 +5,7 @@ export const meetingsApi = {
   get: (id) => api.get(`/meetings/${id}`),
   getByCode: (code) => api.get(`/meetings/by-code/${encodeURIComponent(code)}`),
   create: (data) => api.post("/meetings", data),
+  createScheduled: (data) => api.post("/meetings/scheduled", data),
   update: (id, data) => api.patch(`/meetings/${id}`, data),
   delete: (id) => api.delete(`/meetings/${id}`),
   end: (id) => api.post(`/meetings/${id}/end`),
@@ -68,4 +69,20 @@ export const meetingsApi = {
 
   deleteTranscript: (transcriptId) =>
     api.delete(`/meetings/transcripts/${transcriptId}`),
+
+  getAnalysis: (meetingId) => api.get(`/meetings/${meetingId}/analysis`),
+
+  getAnalysisStatus: (meetingId) => api.get(`/meetings/${meetingId}/analysis/status`),
+
+  // Session History (Phase 5)
+  listSessions: (meetingId) => api.get(`/meetings/${meetingId}/sessions`),
+  getSession: (meetingId, sessionId) => api.get(`/meetings/${meetingId}/sessions/${sessionId}`),
+  listSessionRecordings: (meetingId, sessionId) =>
+    api.get(`/meetings/${meetingId}/sessions/${sessionId}/recordings`),
+  listSessionTranscripts: (meetingId, sessionId) =>
+    api.get(`/meetings/${meetingId}/sessions/${sessionId}/transcripts`),
+  getSessionAnalysis: (meetingId, sessionId) =>
+    api.get(`/meetings/${meetingId}/sessions/${sessionId}/analysis`),
+  getSessionAnalysisStatus: (meetingId, sessionId) =>
+    api.get(`/meetings/${meetingId}/sessions/${sessionId}/analysis/status`),
 }

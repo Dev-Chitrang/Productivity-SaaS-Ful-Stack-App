@@ -7,9 +7,4 @@ export const taskSchema = z.object({
     priority: z.enum(["LOW", "MEDIUM", "HIGH"]).default("MEDIUM"),
     due_date: z.string().nullable().optional(),
     labels: z.array(z.string()).default([]),
-    checklist: z.array(z.object({
-        id: z.string(),
-        text: z.string().min(1, "Checklist item cannot be empty"),
-        completed: z.boolean().default(false),
-    })).default([]),
 })

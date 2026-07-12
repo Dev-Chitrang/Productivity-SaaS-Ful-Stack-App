@@ -13,10 +13,12 @@ from app.modules.tasks.exceptions import (
     TaskValidationError
 )
 from app.utils.tiptap_converter import tiptap_doc_to_plain_text
+from app.modules.entity_links.repository import EntityLinkRepository
 
 class TaskService:
-    def __init__(self, repo: TaskRepository):
+    def __init__(self, repo: TaskRepository, attachment_service=None):
         self.repo = repo
+        self._attachment_service = attachment_service
 
     async def get_task(self, user_id: UUID, task_id: UUID, include_deleted: bool = False) -> Task:
         task = await self.repo.get_by_id(task_id, include_deleted=include_deleted)
@@ -97,6 +99,15 @@ class TaskService:
 
     async def delete_task(self, user_id: UUID, task_id: UUID) -> None:
         task = await self.get_task(user_id, task_id, include_deleted=False)
+        # Cascade: remove all attachments before soft-deleting the task
+        if self._attachment_service is not None:
+            from app.modules.attachments.enums import AttachmentEntityType
+            await self._attachment_service.delete_all_for_entity(
+                AttachmentEntityType.TASK, task_id
+            )
+        # Soft-delete associated entity links
+        el_repo = EntityLinkRepository(self.repo.db)
+        await el_repo.soft_delete_by_entity("task", task_id)
         await self.repo.soft_delete(task)
         await self.repo.create_history_bulk([{
             "task_id": task.id, "user_id": user_id, "action": "DELETED", "field_name": None, "old_value": None, "new_value": None

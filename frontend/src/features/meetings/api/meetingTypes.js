@@ -64,6 +64,21 @@ export const MEETING_STATUS_DOTS = {
   CANCELLED: "bg-red-500",
 }
 
+export const MeetingType = Object.freeze({
+  INSTANT: "INSTANT",
+  SCHEDULED: "SCHEDULED",
+})
+
+export const MEETING_TYPE_LABELS = {
+  INSTANT: "Instant",
+  SCHEDULED: "Scheduled",
+}
+
+export const MEETING_TYPE_CLASSES = {
+  INSTANT: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800",
+  SCHEDULED: "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800",
+}
+
 /**
  * @typedef {Object} Meeting
  * @property {string} id
@@ -78,6 +93,14 @@ export const MEETING_STATUS_DOTS = {
  * @property {string} created_at
  * @property {string} updated_at
  * @property {string} [ended_at]
+ * @property {string} [meeting_type]
+  * @property {string} [scheduled_start]
+  * @property {number} [duration]
+ * @property {string} [timezone]
+ * @property {string} [agenda]
+ * @property {boolean} [enable_ai_analysis]
+ * @property {boolean} [can_join]
+ * @property {number} [invited_participants_count]
  */
 
 /**

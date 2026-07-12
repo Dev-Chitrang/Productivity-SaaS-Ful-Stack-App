@@ -15,7 +15,10 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     is_2fa_enabled = Column(Boolean, default=False)
     profile_image = Column(Text, nullable=True)
-    timezone = Column(String, default="UTC")
+    # Nullable so that new/existing users with no preference resolve to NULL.
+    # Business logic falls back to UTC when this is NULL.
+    # The frontend detects the browser timezone and populates this via PUT /users/profile.
+    timezone = Column(String(64), nullable=True, default=None)
     google_id = Column(String, unique=True, nullable=True, index=True)  # Google OAuth subject ID
     oauth_provider = Column(String, nullable=True)  # e.g., 'google', 'password', 'google+password'
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

@@ -13,6 +13,8 @@ from app.modules.auth.schema import (
     ResendOtpRequest, TokenResponse, GoogleOAuthRequest, GoogleOAuthResponse
 )
 
+from app.core.rate_limit import RateLimiter
+
 router = APIRouter(prefix="/auth", tags=["Identity Operations Infrastructure"])
 
 async def get_controller(
@@ -23,7 +25,7 @@ async def get_controller(
     service = AuthService(repo, redis)
     return AuthController(service)
 
-@router.post("/google", response_model=GoogleOAuthResponse, status_code=200)
+@router.post("/google", response_model=GoogleOAuthResponse, status_code=200, dependencies=[Depends(RateLimiter(3, 60, "auth"))])
 async def google_oauth_route(payload: GoogleOAuthRequest, ctrl: AuthController = Depends(get_controller)):
     """
     Accepts a Google ID Token from the frontend OAuth popup.
@@ -32,27 +34,27 @@ async def google_oauth_route(payload: GoogleOAuthRequest, ctrl: AuthController =
     """
     return await ctrl.handle_google_oauth(payload)
 
-@router.post("/signup", status_code=201)
+@router.post("/signup", status_code=201, dependencies=[Depends(RateLimiter(3, 60, "auth"))])
 async def signup_route(payload: UserRegisterRequest, ctrl: AuthController = Depends(get_controller)):
     return await ctrl.handle_signup(payload)
 
-@router.post("/verify-signup", response_model=TokenResponse)
+@router.post("/verify-signup", response_model=TokenResponse, dependencies=[Depends(RateLimiter(3, 60, "auth"))])
 async def verify_signup_route(payload: OTPVerificationRequest, ctrl: AuthController = Depends(get_controller)):
     return await ctrl.handle_verify_signup(payload)
 
-@router.post("/resend-signup-otp", status_code=200)
+@router.post("/resend-signup-otp", status_code=200, dependencies=[Depends(RateLimiter(3, 60, "auth"))])
 async def resend_signup_otp_route(payload: ResendOtpRequest, ctrl: AuthController = Depends(get_controller)):
     return await ctrl.handle_resend_signup_otp(payload)
 
-@router.post("/login", status_code=200)
+@router.post("/login", status_code=200, dependencies=[Depends(RateLimiter(3, 60, "auth"))])
 async def login_route(payload: UserLoginRequest, ctrl: AuthController = Depends(get_controller)):
     return await ctrl.handle_login(payload)
 
-@router.post("/verify-login", response_model=TokenResponse)
+@router.post("/verify-login", response_model=TokenResponse, dependencies=[Depends(RateLimiter(3, 60, "auth"))])
 async def verify_login_route(payload: OTPVerificationRequest, ctrl: AuthController = Depends(get_controller)):
     return await ctrl.handle_verify_login(payload)
 
-@router.post("/resend-login-otp", status_code=200)
+@router.post("/resend-login-otp", status_code=200, dependencies=[Depends(RateLimiter(3, 60, "auth"))])
 async def resend_login_otp_route(payload: ResendOtpRequest, ctrl: AuthController = Depends(get_controller)):
     return await ctrl.handle_resend_login_otp(payload)
 
@@ -60,10 +62,10 @@ async def resend_login_otp_route(payload: ResendOtpRequest, ctrl: AuthController
 async def refresh_route(payload: TokenRefreshRequest, ctrl: AuthController = Depends(get_controller)):
     return await ctrl.handle_refresh(payload)
 
-@router.post("/password-reset/initiate", status_code=200)
+@router.post("/password-reset/initiate", status_code=200, dependencies=[Depends(RateLimiter(3, 60, "auth"))])
 async def reset_initiate_route(payload: PasswordResetInitiate, ctrl: AuthController = Depends(get_controller)):
     return await ctrl.handle_password_reset_request(payload)
 
-@router.post("/password-reset/confirm", status_code=200)
+@router.post("/password-reset/confirm", status_code=200, dependencies=[Depends(RateLimiter(3, 60, "auth"))])
 async def reset_confirm_route(payload: PasswordResetConfirm, ctrl: AuthController = Depends(get_controller)):
     return await ctrl.handle_password_reset_confirm(payload)

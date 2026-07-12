@@ -668,7 +668,6 @@ export function MeetingRoom({
   }
 
   const handleStopTranscript = () => {
-    uploadTranscriptData()
     setTranscriptActive(false)
   }
 

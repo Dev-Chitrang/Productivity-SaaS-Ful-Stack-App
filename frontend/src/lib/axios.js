@@ -36,6 +36,11 @@ api.interceptors.response.use(
             return Promise.reject(error)
         }
 
+        // Auth endpoints are public — don't try to refresh tokens on 401
+        if (originalRequest.url?.startsWith('/auth/')) {
+            return Promise.reject(error)
+        }
+
         if (isRefreshing) {
             return new Promise((resolve, reject) => {
                 failedQueue.push({ resolve, reject })

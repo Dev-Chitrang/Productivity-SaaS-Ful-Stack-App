@@ -4,13 +4,14 @@ import toast from "react-hot-toast"
 import { useNavigate } from "react-router-dom"
 import { authApi } from "../services/authApi"
 import { useAuthContext } from "@/context/AuthContext"
+import { mapAuthError } from "../utils/authErrorMapper"
 
 export function useSignup() {
   const signupMutation = useMutation({
     mutationFn: authApi.signup,
     onError: (error) => {
-      const message = error?.response?.data?.detail || "Registration failed."
-      toast.error(message)
+      const mapped = mapAuthError(error)
+      toast.error(mapped.message)
     },
   })
 
@@ -20,8 +21,8 @@ export function useSignup() {
       toast.success("Email verified successfully. Please sign in.")
     },
     onError: (error) => {
-      const message = error?.response?.data?.detail || "Verification failed."
-      toast.error(message)
+      const mapped = mapAuthError(error)
+      toast.error(mapped.message)
     },
   })
 
@@ -31,8 +32,8 @@ export function useSignup() {
       toast.success("Verification code resent.")
     },
     onError: (error) => {
-      const message = error?.response?.data?.detail || "Failed to resend."
-      toast.error(message)
+      const mapped = mapAuthError(error)
+      toast.error(mapped.message)
     },
   })
 
@@ -46,8 +47,8 @@ export function useLogin({ redirectUrl } = {}) {
   const loginMutation = useMutation({
     mutationFn: authApi.login,
     onError: (error) => {
-      const message = error?.response?.data?.detail || "Login failed."
-      toast.error(message)
+      const mapped = mapAuthError(error)
+      toast.error(mapped.message)
     },
   })
 
@@ -59,8 +60,8 @@ export function useLogin({ redirectUrl } = {}) {
       navigate(redirectUrl || "/dashboard")
     },
     onError: (error) => {
-      const message = error?.response?.data?.detail || "Verification failed."
-      toast.error(message)
+      const mapped = mapAuthError(error)
+      toast.error(mapped.message)
     },
   })
 
@@ -70,8 +71,8 @@ export function useLogin({ redirectUrl } = {}) {
       toast.success("Verification code resent.")
     },
     onError: (error) => {
-      const message = error?.response?.data?.detail || "Failed to resend."
-      toast.error(message)
+      const mapped = mapAuthError(error)
+      toast.error(mapped.message)
     },
   })
 
@@ -85,8 +86,8 @@ export function useForgotPassword() {
       toast.success("Check your email for reset instructions.")
     },
     onError: (error) => {
-      const message = error?.response?.data?.detail || "Something went wrong."
-      toast.error(message)
+      const mapped = mapAuthError(error)
+      toast.error(mapped.message)
     },
   })
 }
@@ -101,8 +102,8 @@ export function useResetPassword() {
       navigate("/auth")
     },
     onError: (error) => {
-      const message = error?.response?.data?.detail || "Reset failed."
-      toast.error(message)
+      const mapped = mapAuthError(error)
+      toast.error(mapped.message)
     },
   })
 }
@@ -122,8 +123,8 @@ export function useGoogleOAuth({ onOtpRequired, onSuccess }) {
   const googleMutation = useMutation({
     mutationFn: (id_token) => authApi.googleLogin(id_token),
     onError: (error) => {
-      const message = error?.response?.data?.detail || "Google sign-in failed."
-      toast.error(message)
+      const mapped = mapAuthError(error)
+      toast.error(mapped.message)
     },
   })
 

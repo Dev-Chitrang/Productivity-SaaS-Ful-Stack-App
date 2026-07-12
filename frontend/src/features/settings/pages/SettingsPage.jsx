@@ -14,12 +14,19 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import { Separator } from "@/components/ui/separator"
 import { useAuthContext } from "@/context/AuthContext"
 import {
   useChangeEmail,
   useChangePassword,
   useToggle2FA,
 } from "@/hooks/useUserApi"
+import ReminderSettings from "@/features/settings/components/ReminderSettings"
+import { TimezoneField } from "@/components/TimezoneField"
+import { getEffectiveTimezone } from "@/lib/timezone"
+import { useMutation } from "@tanstack/react-query"
+import { userApi } from "@/features/auth/services/authApi"
+import toast from "react-hot-toast"
 
 const emailSchema = z.object({
   current_password: z.string().min(1, "Password is required"),
@@ -38,10 +45,20 @@ const passwordSchema = z
   })
 
 function SettingsPage() {
-  const { user } = useAuthContext()
+  const { user, refreshUser } = useAuthContext()
   const changeEmailMutation = useChangeEmail()
   const changePasswordMutation = useChangePassword()
   const toggle2FAMutation = useToggle2FA()
+  const timezoneMutation = useMutation({
+    mutationFn: (timezone) => userApi.updateProfile({ timezone }),
+    onSuccess: () => {
+      toast.success("Timezone updated.")
+      refreshUser()
+    },
+    onError: () => {
+      toast.error("Failed to update timezone.")
+    },
+  })
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -186,6 +203,19 @@ function SettingsPage() {
                   : "Enable 2FA"}
             </Button>
           </section>
+
+          <section>
+            <h2 className="mb-4 text-sm font-semibold tracking-tight">Timezone</h2>
+            <TimezoneField
+              value={getEffectiveTimezone(user?.timezone)}
+              onChange={(tz) => timezoneMutation.mutate(tz)}
+              label="Timezone"
+            />
+          </section>
+
+          <Separator />
+
+          <ReminderSettings />
         </div>
       </main>
   )

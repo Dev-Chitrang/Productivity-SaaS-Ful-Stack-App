@@ -17,3 +17,13 @@ google-auth
 requests
 aiofiles
 python-multipart
+jinja2
+openai
+python-magic
+brevo-python
+boto3
+aioboto3
+pywebpush
+pytest
+pytest-cov
+pytest-asyncio

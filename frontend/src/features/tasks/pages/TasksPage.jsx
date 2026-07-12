@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Plus, Filter, ChevronLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useTasks, useTask, useCreateTask, useUpdateTask, useDeleteTask, useRestoreTask, useToggleArchive, useTogglePin, useToggleFavorite } from "../hooks/useTasksApi"
@@ -13,17 +14,19 @@ import { useModuleSidebarCollapse } from "@/hooks/useModuleSidebarCollapse"
 import { cn } from "@/lib/utils"
 
 export default function TasksPage() {
+    const [searchParams] = useSearchParams()
+    const initialTaskId = searchParams.get("task")
     const [search, setSearch] = useState("")
     const [filters, setFilters] = useState({})
     const [filterOpen, setFilterOpen] = useState(false)
-    const [selectedTaskId, setSelectedTaskId] = useState(null)
+    const [selectedTaskId, setSelectedTaskId] = useState(initialTaskId || null)
     const [isCreating, setIsCreating] = useState(false)
 
     const [deleteTarget, setDeleteTarget] = useState(null)
     const [restoreTarget, setRestoreTarget] = useState(null)
     const [archiveTarget, setArchiveTarget] = useState(null)
 
-    const [mobileView, setMobileView] = useState("list")
+    const [mobileView, setMobileView] = useState(initialTaskId ? "editor" : "list")
     const resizeRef = useRef(null)
     const [leftWidth, setLeftWidth] = useState(320)
     const { collapsed: sidebarCollapsed, toggleSidebar: toggleSidebarCollapse, sidebarWidth } = useModuleSidebarCollapse("tasks_sidebar_collapsed", 320)
@@ -103,7 +106,6 @@ export default function TasksPage() {
                 priority: partialData.priority || "MEDIUM",
                 due_date: partialData.due_date || null,
                 labels: partialData.labels || [],
-                checklist: partialData.checklist || [],
             })
             createMutation.mutate(payload)
         } else if (selectedTaskId) {
@@ -297,7 +299,7 @@ export default function TasksPage() {
                     />
                 )}
 
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-y-auto">
                     <TaskEditor {...editorCommonProps} showBackButton={false} />
                 </div>
             </div>
@@ -335,7 +337,7 @@ export default function TasksPage() {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col h-full">
+                    <div className="h-full overflow-y-auto">
                         <TaskEditor {...editorCommonProps} showBackButton={true} onBack={handleEditorBack} />
                     </div>
                 )}

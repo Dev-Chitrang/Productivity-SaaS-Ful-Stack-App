@@ -1,6 +1,7 @@
 import { Menu } from "lucide-react"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import UserNav from "@/features/dashboard/components/UserNav"
+import NotificationBell from "@/features/notifications/components/NotificationBell"
 
 export function Header({ onMenuClick }) {
   return (
@@ -19,6 +20,7 @@ export function Header({ onMenuClick }) {
         </span>
       </div>
       <div className="flex items-center gap-1">
+        <NotificationBell />
         <ThemeToggle />
         <UserNav />
       </div>
