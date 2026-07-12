@@ -24,4 +24,6 @@ brevo-python
 boto3
 aioboto3
 pywebpush
+pytest
 pytest-cov
+pytest-asyncio

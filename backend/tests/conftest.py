@@ -1,3 +1,9 @@
+import os
+
+# Force TESTING before any app module is imported so that
+# app.core.config creates a TestingSettings instance instead of LocalSettings.
+os.environ["ENVIRONMENT"] = "TESTING"
+
 import pytest
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch

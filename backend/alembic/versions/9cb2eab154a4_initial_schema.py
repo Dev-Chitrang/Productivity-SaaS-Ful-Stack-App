@@ -1,8 +1,8 @@
-"""init
+"""Initial schema
 
-Revision ID: e8cdb67b347f
+Revision ID: 9cb2eab154a4
 Revises: 
-Create Date: 2026-07-07 22:09:21.871344
+Create Date: 2026-07-12 14:03:49.171465
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = 'e8cdb67b347f'
+revision: str = '9cb2eab154a4'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -50,7 +50,7 @@ def upgrade() -> None:
     sa.Column('color', sa.Enum('RED', 'BLUE', 'GREEN', 'YELLOW', 'PURPLE', 'ORANGE', 'GRAY', name='event_color_enum'), nullable=False),
     sa.Column('start_time', sa.DateTime(timezone=True), nullable=False),
     sa.Column('end_time', sa.DateTime(timezone=True), nullable=False),
-    sa.Column('timezone', sa.String(length=100), nullable=False),
+    sa.Column('timezone', sa.String(length=100), nullable=True),
     sa.Column('is_all_day', sa.Boolean(), nullable=False),
     sa.Column('location', sa.String(length=500), nullable=True),
     sa.Column('recurrence_frequency', sa.Enum('DAILY', 'WEEKLY', 'MONTHLY', name='recurrence_frequency_enum'), nullable=True),
@@ -156,7 +156,7 @@ def upgrade() -> None:
     sa.Column('is_active', sa.Boolean(), nullable=True),
     sa.Column('is_2fa_enabled', sa.Boolean(), nullable=True),
     sa.Column('profile_image', sa.Text(), nullable=True),
-    sa.Column('timezone', sa.String(), nullable=True),
+    sa.Column('timezone', sa.String(length=64), nullable=True),
     sa.Column('google_id', sa.String(), nullable=True),
     sa.Column('oauth_provider', sa.String(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=True),
@@ -208,6 +208,40 @@ def upgrade() -> None:
     op.create_index(op.f('ix_meeting_sessions_host_id'), 'meeting_sessions', ['host_id'], unique=False)
     op.create_index(op.f('ix_meeting_sessions_id'), 'meeting_sessions', ['id'], unique=False)
     op.create_index(op.f('ix_meeting_sessions_meeting_id'), 'meeting_sessions', ['meeting_id'], unique=False)
+    op.create_table('notification_subscriptions',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('user_id', sa.UUID(), nullable=False),
+    sa.Column('endpoint', sa.String(length=512), nullable=False),
+    sa.Column('p256dh', sa.String(length=256), nullable=False),
+    sa.Column('auth', sa.String(length=256), nullable=False),
+    sa.Column('browser', sa.String(length=50), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_notification_subscriptions_id'), 'notification_subscriptions', ['id'], unique=False)
+    op.create_index(op.f('ix_notification_subscriptions_user_id'), 'notification_subscriptions', ['user_id'], unique=False)
+    op.create_table('notifications',
+    sa.Column('id', sa.UUID(), nullable=False),
+    sa.Column('user_id', sa.UUID(), nullable=False),
+    sa.Column('type', sa.Enum('MEETING_REMINDER', name='notification_type_enum'), nullable=False),
+    sa.Column('title', sa.String(length=255), nullable=False),
+    sa.Column('body', sa.String(length=1000), nullable=False),
+    sa.Column('extra_data', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    sa.Column('is_read', sa.Boolean(), nullable=False),
+    sa.Column('sent_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
+    sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_notifications_id'), 'notifications', ['id'], unique=False)
+    op.create_index(op.f('ix_notifications_is_read'), 'notifications', ['is_read'], unique=False)
+    op.create_index(op.f('ix_notifications_type'), 'notifications', ['type'], unique=False)
+    op.create_index('ix_notifications_user_created', 'notifications', ['user_id', 'created_at'], unique=False)
+    op.create_index(op.f('ix_notifications_user_id'), 'notifications', ['user_id'], unique=False)
     op.create_table('task_history',
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('task_id', sa.UUID(), nullable=False),
@@ -349,6 +383,15 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_task_history_task_id'), table_name='task_history')
     op.drop_index(op.f('ix_task_history_id'), table_name='task_history')
     op.drop_table('task_history')
+    op.drop_index(op.f('ix_notifications_user_id'), table_name='notifications')
+    op.drop_index('ix_notifications_user_created', table_name='notifications')
+    op.drop_index(op.f('ix_notifications_type'), table_name='notifications')
+    op.drop_index(op.f('ix_notifications_is_read'), table_name='notifications')
+    op.drop_index(op.f('ix_notifications_id'), table_name='notifications')
+    op.drop_table('notifications')
+    op.drop_index(op.f('ix_notification_subscriptions_user_id'), table_name='notification_subscriptions')
+    op.drop_index(op.f('ix_notification_subscriptions_id'), table_name='notification_subscriptions')
+    op.drop_table('notification_subscriptions')
     op.drop_index(op.f('ix_meeting_sessions_meeting_id'), table_name='meeting_sessions')
     op.drop_index(op.f('ix_meeting_sessions_id'), table_name='meeting_sessions')
     op.drop_index(op.f('ix_meeting_sessions_host_id'), table_name='meeting_sessions')
