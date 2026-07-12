@@ -305,7 +305,13 @@ pytest
 
 ## Screenshots
 
-Screenshots will be added after the V2 release.
+| | |
+|---|---|
+| ![](images/Screenshot%202026-07-06%20183347.png) | ![](images/Screenshot%202026-07-12%20173815.png) |
+| ![](images/Screenshot%202026-07-12%20173834.png) | ![](images/Screenshot%202026-07-12%20173851.png) |
+| ![](images/Screenshot%202026-07-12%20175542.png) | ![](images/Screenshot%202026-07-12%20175749.png) |
+| ![](images/Screenshot%202026-07-12%20175804.png) | ![](images/Screenshot%202026-07-12%20175819.png) |
+| ![](images/Screenshot%202026-07-12%20175830.png) | ![](images/Screenshot%202026-07-12%20175845.png) |
 
 ---
 

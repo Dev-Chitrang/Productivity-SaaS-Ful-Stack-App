@@ -70,21 +70,21 @@ function ProfilePage() {
 
   return (
     <main className="mx-auto max-w-lg px-6 py-8">
-        <div className="mb-8 flex flex-col items-center gap-4">
+        <div className="mb-8 flex flex-col items-center gap-3">
           <div className="relative">
-            <Avatar size="lg">
+            <Avatar size="xl">
               {(profile?.profile_image || user?.profile_image) ? (
                 <AvatarImage src={profile?.profile_image || user?.profile_image} />
               ) : (
-                <AvatarFallback className="text-sm font-medium">{initials}</AvatarFallback>
+                <AvatarFallback className="text-lg font-medium">{initials}</AvatarFallback>
               )}
             </Avatar>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-background"
+              className="absolute -right-1 -bottom-1 flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-background hover:bg-primary/90 transition-colors"
             >
-              <Camera className="size-3" />
+              <Camera className="size-4" />
             </button>
             <input
               ref={fileInputRef}
@@ -94,6 +94,7 @@ function ProfilePage() {
               onChange={handleImageUpload}
             />
           </div>
+          <p className="text-sm font-semibold">{profile?.full_name || user?.full_name || "User"}</p>
         </div>
 
         <Form {...form}>

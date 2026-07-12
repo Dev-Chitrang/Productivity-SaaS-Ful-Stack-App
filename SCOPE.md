@@ -4,7 +4,7 @@ This document defines the scope of the Productivity Suite application. It is not
 
 The application is versioned across two release branches:
 - **`release/v1` (Scope 1):** Core productivity features.
-- **`develop/v2` (Scope 2):** V1 plus advanced collaboration, AI, and infrastructure features.
+- **`release/v2` (Scope 2):** V1 plus advanced collaboration, AI, and infrastructure features.
 
 Each section below is tagged with the version(s) that include it.
 
@@ -33,7 +33,7 @@ A modular, full-stack productivity application that combines task management, no
 - Resend OTP endpoints for both signup and login flows
 - Sliding-window rate limiting on all auth endpoints (3 requests per 60 seconds)
 
-**Versions:** `release/v1` (core auth), `develop/v2` (+ Google OAuth, 2FA, rate limiting)
+**Versions:** `release/v1` (core auth), `release/v2` (+ Google OAuth, 2FA, rate limiting)
 
 **Current Limitations:**
 - Only Google OAuth is supported as an external identity provider
@@ -61,7 +61,7 @@ A modular, full-stack productivity application that combines task management, no
 - Notes analytics chart (Recharts)
 - Tasks analytics chart (Recharts)
 
-**Versions:** `release/v1` (basic dashboard), `develop/v2` (enhanced with attachments, AI analyses, notifications widgets)
+**Versions:** `release/v1` (basic dashboard), `release/v2` (enhanced with attachments, AI analyses, notifications widgets)
 
 **Current Limitations:**
 - No dedicated dashboard API endpoint; composed from multiple module-specific queries
@@ -96,7 +96,7 @@ A modular, full-stack productivity application that combines task management, no
 - Meeting-level linked tasks (from entity links)
 - Meeting list with search and status filtering
 
-**Versions:** `release/v1` (instant meetings, audio, waiting room, screen share, recordings/transcripts), `develop/v2` (+ scheduled meetings, invitations, session history, session-level artifacts)
+**Versions:** `release/v1` (instant meetings, audio, waiting room, screen share, recordings/transcripts), `release/v2` (+ scheduled meetings, invitations, session history, session-level artifacts)
 
 **Current Limitations:**
 - Audio-only; no video support
@@ -125,7 +125,7 @@ A modular, full-stack productivity application that combines task management, no
 - Per-session linked tasks
 - Session detail page with all session-specific data
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 **Current Limitations:**
 - Session state is stored in Redis for low latency, but not persisted to the database as a full record
@@ -155,7 +155,7 @@ A modular, full-stack productivity application that combines task management, no
 - Linked meetings panel showing associated meetings (via entity links)
 - Attachment uploads (documents, images, audio, video, archives)
 
-**Versions:** `release/v1` (core task CRUD, checklists, labels, search), `develop/v2` (+ attachments, linked meetings)
+**Versions:** `release/v1` (core task CRUD, checklists, labels, search), `release/v2` (+ attachments, linked meetings)
 
 **Current Limitations:**
 - No task assignee or multi-user task assignment
@@ -188,7 +188,7 @@ A modular, full-stack productivity application that combines task management, no
 - Attachment uploads for calendar events
 - Merges calendar events with task due dates into unified timeline view
 
-**Versions:** `release/v1` (core calendar, views, recurrence), `develop/v2` (+ attachments)
+**Versions:** `release/v1` (core calendar, views, recurrence), `release/v2` (+ attachments)
 
 **Current Limitations:**
 - No drag-and-drop event rescheduling
@@ -280,7 +280,7 @@ A modular, full-stack productivity application that combines task management, no
 - Recent attachments widget on dashboard
 - Attachment metadata: filename, content type, size, storage path
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 **Current Limitations:**
 - No inline file preview in the UI
@@ -306,7 +306,7 @@ A modular, full-stack productivity application that combines task management, no
 - List and filter links by source or target entity
 - Delete entity links
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 **Current Limitations:**
 - Only supports linking meetings, meeting sessions, and tasks
@@ -334,7 +334,7 @@ A modular, full-stack productivity application that combines task management, no
 - Reject suggestion: dismisses the suggestion
 - Recent analyses widget on dashboard
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 **Current Limitations:**
 - Only analyzes meeting transcripts; no analysis for notes, tasks, or other content
@@ -359,7 +359,7 @@ A modular, full-stack productivity application that combines task management, no
 - Celery Beat sweeps every 30 minutes for email reminders
 - Celery Beat sweeps every 60 seconds for meeting push reminders
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 **Current Limitations:**
 - Email reminders only; no in-app notification delivery for reminders
@@ -379,7 +379,7 @@ A modular, full-stack productivity application that combines task management, no
 - Notification subscription management
 - Meeting reminder notifications via push
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 **Current Limitations:**
 - No notification preferences or mute controls
@@ -399,7 +399,7 @@ A modular, full-stack productivity application that combines task management, no
 - **Cache/Broker:** Redis 7.2 for session management, OTP storage, rate limiting, and Celery task queue
 - **Task Queue:** Celery with Redis broker for async email delivery, AI analysis, and scheduled reminders
 
-**Versions:** `release/v1` (core architecture), `develop/v2` (+ Redis session engine, Celery Beat)
+**Versions:** `release/v1` (core architecture), `release/v2` (+ Redis session engine, Celery Beat)
 
 ---
 
@@ -413,7 +413,7 @@ A modular, full-stack productivity application that combines task management, no
 - Celery handles all long-running operations (email, AI analysis) off the main request thread
 - Autosave uses debounce timers to prevent excessive writes
 
-**Versions:** `release/v1` (core performance), `develop/v2` (+ Redis session caching)
+**Versions:** `release/v1` (core performance), `release/v2` (+ Redis session caching)
 
 ---
 
@@ -434,7 +434,7 @@ A modular, full-stack productivity application that combines task management, no
 - Non-root Docker container execution
 - Secrets managed via environment variables, never hardcoded
 
-**Versions:** `release/v1` (core security), `develop/v2` (+ Google OAuth, rate limiting, 2FA)
+**Versions:** `release/v1` (core security), `release/v2` (+ Google OAuth, rate limiting, 2FA)
 
 ---
 
@@ -450,7 +450,7 @@ A modular, full-stack productivity application that combines task management, no
 - Worker task tests covering Celery configuration, retry logic, and execution flows
 - Utility tests (TipTap converter)
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 ---
 
@@ -465,7 +465,7 @@ A modular, full-stack productivity application that combines task management, no
 - **Provider Factory:** `get_storage_provider()` and `get_email_provider()` select implementations based on `ENVIRONMENT` variable
 - **Storage Service:** Facade wrapping provider with validation (MIME check, size check, extension check), presigned URL support, and path management
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 ---
 
@@ -485,7 +485,7 @@ A modular, full-stack productivity application that combines task management, no
 - Backend entrypoint waits for PostgreSQL health check and runs Alembic migrations on startup
 - Two Docker networks: `saas_backend_net` (backend, database, Redis, Celery) and `saas_frontend_net` (frontend)
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 ---
 
@@ -498,7 +498,7 @@ A modular, full-stack productivity application that combines task management, no
 - WebSocket connection manager supports room-based isolation (one room per meeting)
 - Database queries indexed on foreign keys and commonly filtered columns
 
-**Versions:** `release/v1` (core scalability), `develop/v2` (+ S3, Celery Beat)
+**Versions:** `release/v1` (core scalability), `release/v2` (+ S3, Celery Beat)
 
 ---
 
@@ -515,7 +515,7 @@ A modular, full-stack productivity application that combines task management, no
 - SQLAlchemy ORM with Alembic for schema versioning
 - Environment-driven configuration via pydantic-settings
 
-**Versions:** `release/v1` (core maintainability), `develop/v2` (+ comprehensive test suite)
+**Versions:** `release/v1` (core maintainability), `release/v2` (+ comprehensive test suite)
 
 ---
 
@@ -527,7 +527,7 @@ A modular, full-stack productivity application that combines task management, no
 - Desktop and mobile responsive layout
 - Dark and light theme support
 
-**Versions:** `release/v1` (core browser support), `develop/v2` (+ Web Push API)
+**Versions:** `release/v1` (core browser support), `release/v2` (+ Web Push API)
 
 ---
 
@@ -535,7 +535,7 @@ A modular, full-stack productivity application that combines task management, no
 
 The application is fully containerized and supports deployment via Docker Compose with 6 services.
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 ---
 
@@ -550,7 +550,7 @@ Development environment configuration:
 - Local filesystem for file storage
 - Mailpit for email catching (viewable at http://localhost:8025)
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 ---
 
@@ -569,7 +569,7 @@ Production environment configuration:
 - Health checks on all services
 - Non-root container execution
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 ---
 
@@ -581,7 +581,7 @@ Production environment configuration:
 - unittest.mock for isolation
 - Celery task tests with mocked async loops
 
-**Versions:** `develop/v2` only
+**Versions:** `release/v2` only
 
 ---
 
@@ -599,7 +599,7 @@ Production environment configuration:
 | **Whiteboard** | Canvas drawing, shapes, undo/redo, export to PNG |
 | **Meetings** | Instant meetings, WebRTC audio, waiting room, screen share, recordings/transcripts |
 
-### develop/v2 — Scope 2 (Advanced Collaboration & AI)
+### release/v2 — Scope 2 (Advanced Collaboration & AI)
 
 Everything in Scope 1, plus:
 
@@ -672,4 +672,4 @@ The application currently supports the following and **only** the following:
 
 13. **Rate limiting is fail-open.** If Redis is unavailable, rate limiting is bypassed rather than blocking requests.
 
-14. **The application is versioned as `release/v1` (scope 1) and `develop/v2` (scope 2).** This document clearly separates features by version.
+14. **The application is versioned as `release/v1` (scope 1) and `release/v2` (scope 2).** This document clearly separates features by version.

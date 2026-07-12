@@ -47,9 +47,10 @@ COPY alembic/ alembic/
 COPY app/ app/
 COPY entrypoint.sh .
 COPY celery_entrypoint.sh .
+COPY start_celery.py .
 
 RUN mkdir -p /app/downloads /app/logs \
-    && chown -R appuser:appuser /app/downloads /app/logs \
+    && chown -R appuser:appuser /app \
     && chmod +x /app/entrypoint.sh /app/celery_entrypoint.sh
 
 RUN find /app -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; \
