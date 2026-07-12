@@ -28,7 +28,8 @@ class CalendarEventBase(BaseModel):
     color: EventColor = Field(default=EventColor.BLUE)
     start_time: datetime = Field(..., description="Timezone-aware start datetime (UTC).")
     end_time: datetime = Field(..., description="Timezone-aware end datetime (UTC).")
-    timezone: str = Field(default="UTC", description="Target local viewing timezone name string.")
+    # Optional — if omitted the user's profile timezone is used; falls back to UTC.
+    timezone: Optional[str] = Field(None, description="Target local viewing timezone name string. Defaults to the user's profile timezone or UTC.")
     is_all_day: bool = Field(default=False)
     location: Optional[str] = Field(None, max_length=500)
     recurrence_frequency: Optional[RecurrenceFrequency] = None
@@ -47,7 +48,9 @@ class CalendarEventBase(BaseModel):
 
     @field_validator("timezone")
     @classmethod
-    def validate_timezone(cls, value: str) -> str:
+    def validate_timezone(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
         if value not in _KNOWN_TIMEZONES:
             raise ValueError(f"'{value}' is not a valid IANA timezone identifier.")
         return value
@@ -130,7 +133,7 @@ class CalendarOccurrenceResponse(BaseModel):
     color: EventColor
     start_time: datetime
     end_time: datetime
-    timezone: str
+    timezone: Optional[str]
     is_all_day: bool
     location: Optional[str]
     is_recurring: bool = Field(default=False)

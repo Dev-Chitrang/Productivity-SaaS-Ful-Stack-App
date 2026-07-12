@@ -17,6 +17,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuthContext } from "@/context/AuthContext"
 import { useProfile } from "@/hooks/useUserApi"
+import { TimezoneField } from "@/components/TimezoneField"
+import { getEffectiveTimezone } from "@/lib/timezone"
 
 const profileSchema = z.object({
   full_name: z.string().min(2, "Name must be at least 2 characters"),
@@ -105,6 +107,12 @@ function ProfilePage() {
                     <Input className="pl-8" {...field} />
                   </div>
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )} />
+            <FormField control={form.control} name="timezone" render={({ field }) => (
+              <FormItem>
+                <TimezoneField value={field.value || getEffectiveTimezone(user?.timezone)} onChange={field.onChange} label="Timezone" />
                 <FormMessage />
               </FormItem>
             )} />

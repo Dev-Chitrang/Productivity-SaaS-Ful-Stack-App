@@ -123,11 +123,11 @@ export function MeetingDetails({
                 Scheduled Meeting
               </p>
               <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-                {meeting.scheduled_date && meeting.scheduled_time && (
+                {meeting.scheduled_start && (
                   <div>
                     <span className="text-muted-foreground">Scheduled Time</span>
                     <p className="mt-0.5 font-medium">
-                      {new Date(`${meeting.scheduled_date}T${meeting.scheduled_time}`).toLocaleString("en-US", {
+                      {new Date(meeting.scheduled_start).toLocaleString("en-US", {
                         month: "short",
                         day: "numeric",
                         year: "numeric",

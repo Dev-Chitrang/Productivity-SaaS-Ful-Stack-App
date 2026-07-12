@@ -22,25 +22,11 @@ import {
 import { eventSchema, EVENT_TYPE_OPTIONS, EVENT_COLOR_OPTIONS, RECURRENCE_FREQUENCY_OPTIONS } from "../schemas/eventSchema"
 import { EVENT_TYPE_LABELS, EVENT_COLOR_LABELS, RECURRENCE_LABELS, EVENT_COLOR_HEX } from "../api/calendarTypes"
 import { hhmmToAmpm, ampmToHHmm } from "../api/calendarMapper"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { TimezoneField } from "@/components/TimezoneField"
 
 const HOURS_12 = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
 const MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"]
 const AMPM_OPTS = ["AM", "PM"]
-
-const COMMON_TIMEZONES = [
-    "UTC",
-    "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
-    "America/Sao_Paulo", "Europe/London", "Europe/Paris", "Europe/Berlin",
-    "Africa/Cairo", "Asia/Dubai", "Asia/Kolkata", "Asia/Singapore",
-    "Asia/Tokyo", "Australia/Sydney",
-]
 
 /**
  * 12-hour time picker component.
@@ -310,19 +296,7 @@ export function EventForm({ defaultValues, onSubmit, isPending = false, mode = "
                 {/* Timezone */}
                 <FormField control={form.control} name="timezone" render={({ field }) => (
                     <FormItem>
-                        <FormLabel>Timezone</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                                <SelectTrigger className="h-8 bg-background px-2">
-                                    <SelectValue placeholder="Select timezone" />
-                                </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                                {COMMON_TIMEZONES.map((tz) => (
-                                    <SelectItem key={tz} value={tz}>{tz}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <TimezoneField value={field.value} onChange={field.onChange} />
                         <FormMessage />
                     </FormItem>
                 )} />

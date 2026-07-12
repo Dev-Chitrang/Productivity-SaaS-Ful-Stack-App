@@ -543,7 +543,12 @@ class MeetingService:
         return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm="HS256")
 
     async def create_scheduled_meeting(self, host_id: UUID, payload: ScheduledMeetingCreate) -> Meeting:
+        # Resolve the timezone: explicit in payload → user profile → UTC fallback
+        host = await self.repo.get_user_by_id(host_id)
+        resolved_timezone = payload.timezone or (host.timezone if host and host.timezone else None) or "UTC"
+
         data = payload.model_dump(exclude={"invitations"})
+        data["timezone"] = resolved_timezone  # always store a concrete value
         data["meeting_type"] = MeetingType.SCHEDULED
         data["status"] = MeetingStatus.SCHEDULED
         data["scheduled_by"] = host_id
@@ -573,7 +578,7 @@ class MeetingService:
             f"Description: {meeting.description or 'No description provided'}\n"
             f"Date: {formatted_date}\n"
             f"Time: {formatted_time}\n"
-            f"Timezone: {payload.timezone}\n"
+            f"Timezone: {resolved_timezone}\n"
             f"Meeting Link: {meeting_link}\n\n"
             f"Invited Participants:\n{invited_names}\n\n"
             f"You can manage this meeting from your dashboard."
@@ -600,7 +605,7 @@ class MeetingService:
                 f"Title: {meeting.title}\n"
                 f"Date: {formatted_date}\n"
                 f"Time: {formatted_time}\n"
-                f"Timezone: {payload.timezone}\n"
+                f"Timezone: {resolved_timezone}\n"
                 f"Agenda: {meeting.agenda or 'No agenda provided'}\n"
                 f"Meeting Link: {meeting_link}\n\n"
                 f"See you there!"

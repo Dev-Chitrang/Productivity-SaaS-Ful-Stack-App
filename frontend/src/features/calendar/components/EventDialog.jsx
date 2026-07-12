@@ -10,6 +10,8 @@ import { EventForm } from "./EventForm"
 import { buildCreateDefaults, buildEditDefaults, toCreatePayload, toUpdatePayload } from "../api/calendarMapper"
 import { useCreateEvent, useUpdateEvent } from "../hooks/useCalendarApi"
 import { dayjs } from "../utils/dateUtils"
+import { useAuthContext } from "@/context/AuthContext"
+import { getEffectiveTimezone } from "@/lib/timezone"
 import toast from "react-hot-toast"
 
 /**
@@ -24,6 +26,9 @@ import toast from "react-hot-toast"
  * @param {() => void} props.onClose
  */
 export function EventDialog({ open, mode = "create", event = null, anchorDate, anchorHour, onClose }) {
+    const { user } = useAuthContext()
+    const effectiveTz = getEffectiveTimezone(user?.timezone)
+
     // Build the HH:mm string for the anchor hour if provided
     const anchorHHmm = anchorHour != null
         ? `${String(anchorHour).padStart(2, "0")}:00`
@@ -32,7 +37,7 @@ export function EventDialog({ open, mode = "create", event = null, anchorDate, a
     const defaultValues =
         mode === "edit" && event
             ? buildEditDefaults(event)
-            : buildCreateDefaults(anchorDate ?? null, anchorHHmm)
+            : buildCreateDefaults(anchorDate ?? null, anchorHHmm, effectiveTz)
 
     const createMutation = useCreateEvent(onClose)
     const updateMutation = useUpdateEvent(onClose)
@@ -41,7 +46,7 @@ export function EventDialog({ open, mode = "create", event = null, anchorDate, a
     function handleSubmit(formValues) {
         if (mode === "create") {
             // Frontend past-time guard — never send past events to the API
-            const tz = formValues.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone
+            const tz = formValues.timezone || effectiveTz
             const startDT = dayjs.tz(`${formValues.start_date}T${formValues.start_hhmm}`, tz)
             if (startDT.isBefore(dayjs())) {
                 toast.error("Cannot create events in the past. Please select a future start time.")

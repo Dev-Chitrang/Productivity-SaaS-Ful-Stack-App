@@ -71,16 +71,16 @@ class TestUserProfileResponse:
         )
         assert model.email == "invalid-email"
 
-    def test_missing_timezone_raises(self):
-        with pytest.raises(ValidationError):
-            UserProfileResponse(
-                id="12345678-1234-5678-1234-567812345678",
-                email="user@example.com",
-                full_name="Test User",
-                is_verified=True,
-                is_2fa_enabled=False,
-                created_at="2024-01-01T00:00:00Z",
-            )
+    def test_missing_timezone_is_none(self):
+        resp = UserProfileResponse(
+            id="12345678-1234-5678-1234-567812345678",
+            email="user@example.com",
+            full_name="Test User",
+            is_verified=True,
+            is_2fa_enabled=False,
+            created_at="2024-01-01T00:00:00Z",
+        )
+        assert resp.timezone is None
 
 
 class TestUpdateProfileRequest:

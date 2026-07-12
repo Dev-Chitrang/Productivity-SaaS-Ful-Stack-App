@@ -8,6 +8,7 @@ import { RecentWhiteboards } from "../components/RecentWhiteboards"
 import { RecentAttachments } from "../components/RecentAttachments"
 import { RecentAnalyses } from "../components/RecentAnalyses"
 import { RecentActivity } from "../components/RecentActivity"
+import RecentNotificationsWidget from "@/features/notifications/components/RecentNotificationsWidget"
 
 function DashboardPage() {
     return (
@@ -25,6 +26,7 @@ function DashboardPage() {
                     <UpcomingMeetings />
                 </div>
                 <div className="space-y-4">
+                    <RecentNotificationsWidget />
                     <RecentActivity />
                 </div>
             </div>

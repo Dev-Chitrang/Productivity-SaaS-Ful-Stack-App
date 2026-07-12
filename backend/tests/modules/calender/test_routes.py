@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.core.redis import get_redis_client
 from app.modules.calender.dependencies import (
     get_current_user_id,
+    get_current_user,
     get_calendar_service,
     get_attachment_service,
 )
@@ -84,7 +85,10 @@ class TestCalendarRoutes:
         mock_event.title = "Meeting"
         mock_service.create_event.return_value = mock_event
 
-        app.dependency_overrides[get_current_user_id] = lambda: _mock_current_user_id()
+        mock_user = MagicMock()
+        mock_user.id = _mock_current_user_id()
+        mock_user.timezone = "UTC"
+        app.dependency_overrides[get_current_user] = lambda: mock_user
         app.dependency_overrides[get_calendar_service] = lambda: mock_service
         response = client.post(
             "/api/v1/calendar/events",
@@ -99,7 +103,9 @@ class TestCalendarRoutes:
     async def test_create_event_validation_error(self, client, override_deps):
         mock_service = MagicMock(spec=CalendarService)
         mock_service.create_event.side_effect = CalendarValidationError("Cannot create an event in the past.")
-        app.dependency_overrides[get_current_user_id] = lambda: _mock_current_user_id()
+        mock_user = MagicMock()
+        mock_user.id = _mock_current_user_id()
+        app.dependency_overrides[get_current_user] = lambda: mock_user
         app.dependency_overrides[get_calendar_service] = lambda: mock_service
         response = client.post(
             "/api/v1/calendar/events",

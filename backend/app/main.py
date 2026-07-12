@@ -23,6 +23,7 @@ from app.modules.reminders.routes import router as reminders_router
 from app.modules.entity_links.routes import router as entity_links_router
 from app.modules.entity_links.routes import linked_tasks_router, linked_meetings_router, linked_session_tasks_router
 from app.modules.ai_suggestions.routes import router as ai_suggestions_router
+from app.modules.notifications.routes import router as notifications_router
 
 
 @asynccontextmanager
@@ -70,6 +71,7 @@ app.include_router(linked_tasks_router, prefix=settings.API_V1_STR)
 app.include_router(linked_session_tasks_router, prefix=settings.API_V1_STR)
 app.include_router(linked_meetings_router, prefix=settings.API_V1_STR)
 app.include_router(ai_suggestions_router, prefix=settings.API_V1_STR)
+app.include_router(notifications_router, prefix=settings.API_V1_STR)
 
 @app.get("/health", tags=["System Health"])
 async def health_check(db: AsyncSession = Depends(get_db)):

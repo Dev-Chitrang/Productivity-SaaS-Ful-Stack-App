@@ -20,3 +20,6 @@ app.log
 downloads/
 .env.local
 .env.*.local
+
+private_key.pem
+public_key.pem

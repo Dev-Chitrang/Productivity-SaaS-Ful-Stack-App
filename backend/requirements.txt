@@ -23,4 +23,5 @@ python-magic
 brevo-python
 boto3
 aioboto3
+pywebpush
 pytest-cov

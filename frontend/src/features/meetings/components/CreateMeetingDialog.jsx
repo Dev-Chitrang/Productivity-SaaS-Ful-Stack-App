@@ -20,7 +20,8 @@ import {
 import { Input } from "@/components/ui/input"
 import { createMeetingSchema } from "../schemas/meetingSchema"
 import { useCreateMeeting, useCreateScheduledMeeting } from "../hooks/useMeetingsApi"
-import { useState } from "react"
+import { useAuthContext } from "@/context/AuthContext"
+import { getEffectiveTimezone } from "@/lib/timezone"
 import dayjs from "dayjs"
 import utc from "dayjs/plugin/utc"
 import timezone from "dayjs/plugin/timezone"
@@ -28,35 +29,10 @@ import toast from "react-hot-toast"
 
 dayjs.extend(utc)
 dayjs.extend(timezone)
-import { Plus, Trash, CalendarBlank, Clock, Globe, Note, Robot } from "@phosphor-icons/react"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 
-const COMMON_TIMEZONES = [
-  "UTC",
-  "America/New_York",
-  "America/Chicago",
-  "America/Denver",
-  "America/Los_Angeles",
-  "America/Anchorage",
-  "Pacific/Honolulu",
-  "Europe/London",
-  "Europe/Paris",
-  "Europe/Berlin",
-  "Europe/Moscow",
-  "Asia/Dubai",
-  "Asia/Kolkata",
-  "Asia/Shanghai",
-  "Asia/Tokyo",
-  "Asia/Seoul",
-  "Australia/Sydney",
-  "Pacific/Auckland",
-]
+import { useState } from "react"
+import { Plus, Trash, CalendarBlank, Clock, Note, Robot } from "@phosphor-icons/react"
+import { TimezoneField } from "@/components/TimezoneField"
 
 function mapBackendFieldToFrontend(path) {
   if (!path) return null
@@ -100,15 +76,8 @@ function handleApiError(err, form) {
   }
 }
 
-const defaultTimezone = (() => {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone
-  } catch {
-    return "UTC"
-  }
-})()
-
 export function CreateMeetingDialog({ open, onOpenChange }) {
+  const { user } = useAuthContext()
   const [meetingType, setMeetingType] = useState("INSTANT")
   const [recording, setRecording] = useState(false)
   const [transcript, setTranscript] = useState(false)
@@ -127,7 +96,7 @@ export function CreateMeetingDialog({ open, onOpenChange }) {
       scheduled_date: "",
       scheduled_time: "",
       duration: 30,
-      timezone: defaultTimezone,
+      timezone: getEffectiveTimezone(user?.timezone),
       agenda: "",
       enable_ai_analysis: false,
       participants: [],
@@ -401,26 +370,7 @@ export function CreateMeetingDialog({ open, onOpenChange }) {
                     name="timezone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>
-                          <span className="inline-flex items-center gap-1">
-                            <Globe className="size-3" />
-                            Timezone
-                          </span>
-                        </FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select timezone" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {COMMON_TIMEZONES.map((tz) => (
-                              <SelectItem key={tz} value={tz}>
-                                {tz}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <TimezoneField value={field.value} onChange={field.onChange} />
                         <FormMessage />
                       </FormItem>
                     )}

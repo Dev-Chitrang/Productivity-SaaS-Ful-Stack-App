@@ -18,6 +18,7 @@ import MeetingDetailPage from "../features/meetings/pages/MeetingDetailPage"
 import MeetingRoomPage from "../features/meetings/pages/MeetingRoomPage"
 import MeetingJoinPage from "../features/meetings/pages/MeetingJoinPage"
 import SessionDetailPage from "../features/meetings/pages/SessionDetailPage"
+import NotificationsPage from "../features/notifications/pages/NotificationsPage"
 import AuthLayout from "../layouts/AuthLayout"
 import MainLayout from "../layouts/MainLayout"
 
@@ -66,6 +67,7 @@ function AppRoutes() {
         <Route path="/whiteboards" element={<WhiteboardPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/notifications" element={<NotificationsPage />} />
       </Route>
     </Routes>
   )

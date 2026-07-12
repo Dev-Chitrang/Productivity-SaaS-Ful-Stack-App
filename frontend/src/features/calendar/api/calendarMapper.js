@@ -166,13 +166,14 @@ export function normaliseFrequency(raw) {
  * Builds default form values for the Create Event form.
  * All times stored internally as HH:mm; enums are uppercase backend values.
  *
- * @param {string|null} anchorDate - "YYYY-MM-DD" or null for today
- * @param {string|null} anchorHHmm - "HH:mm" or null for current time
+ * @param {string|null} anchorDate   - "YYYY-MM-DD" or null for today
+ * @param {string|null} anchorHHmm  - "HH:mm" or null for current time
+ * @param {string|null} [userTimezone] - user.timezone from profile (preferred over browser)
  * @returns {object}
  */
-export function buildCreateDefaults(anchorDate, anchorHHmm) {
+export function buildCreateDefaults(anchorDate, anchorHHmm, userTimezone) {
     const base = anchorDate ? dayjs(anchorDate) : dayjs()
-    const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
+    const userTz = userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"
     const now = dayjs()
 
     let startHH

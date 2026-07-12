@@ -173,7 +173,7 @@ class TestCalendarEventCreate:
         )
         assert model.event_type == EventType.PERSONAL
         assert model.color == EventColor.BLUE
-        assert model.timezone == "UTC"
+        assert model.timezone is None
         assert model.is_all_day is False
         assert model.location is None
         assert model.recurrence_frequency is None

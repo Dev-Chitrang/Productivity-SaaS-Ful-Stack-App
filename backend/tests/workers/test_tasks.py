@@ -3,6 +3,7 @@ import uuid
 import asyncio
 from datetime import datetime, timezone
 from unittest.mock import patch, AsyncMock, MagicMock
+from sqlalchemy import text as real_text
 from app.workers.tasks import send_async_email, send_html_email, analyze_meeting_transcript, process_all_reminders, celery_app
 from app.core.providers import get_email_provider
 from app.modules.meetings.enums import AIAnalysisStatus
@@ -353,7 +354,7 @@ class TestProcessAllReminders:
 
     @patch("app.workers.tasks.send_async_email")
     @patch("app.workers.tasks.text", create=True)
-    @patch("app.workers.tasks.async_session_factory", create=True)
+    @patch("app.workers.tasks.AsyncSessionLocal", create=True)
     @patch("app.workers.tasks.timezone", create=True)
     @patch("app.workers.tasks.datetime", create=True)
     async def test_run_all_reminder_scans_with_meeting(self, mock_datetime, mock_timezone, mock_session_factory, mock_text, mock_send_email):
@@ -362,7 +363,7 @@ class TestProcessAllReminders:
         now = datetime.now(timezone.utc)
         mock_datetime.now.return_value = now
         mock_timezone.utc = timezone.utc
-        mock_text.side_effect = lambda sql: sql
+        mock_text.side_effect = lambda sql: real_text(sql)
 
         mock_session = AsyncMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -412,7 +413,7 @@ class TestProcessAllReminders:
 
     @patch("app.workers.tasks.send_async_email")
     @patch("app.workers.tasks.text", create=True)
-    @patch("app.workers.tasks.async_session_factory", create=True)
+    @patch("app.workers.tasks.AsyncSessionLocal", create=True)
     @patch("app.workers.tasks.timezone", create=True)
     @patch("app.workers.tasks.datetime", create=True)
     async def test_run_all_reminder_scans_disabled_settings(self, mock_datetime, mock_timezone, mock_session_factory, mock_text, mock_send_email):
@@ -421,7 +422,7 @@ class TestProcessAllReminders:
         now = datetime.now(timezone.utc)
         mock_datetime.now.return_value = now
         mock_timezone.utc = timezone.utc
-        mock_text.side_effect = lambda sql: sql
+        mock_text.side_effect = lambda sql: real_text(sql)
 
         mock_session = AsyncMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -728,7 +729,7 @@ class TestAnalyzeMeetingTranscriptAdditional:
         mock_completion = AsyncMock()
 
         with patch("asyncio.get_event_loop", return_value=mock_loop), \
-             patch("app.core.database.async_session_factory", mock_sf, create=True), \
+             patch("app.workers.tasks.AsyncSessionLocal", mock_sf, create=True), \
              patch("app.modules.meetings.repository.MeetingSessionRepository", return_value=mock_session_repo), \
              patch("app.modules.meetings.repository.MeetingRepository", return_value=mock_meeting_repo), \
              patch("app.modules.meetings.repository.MeetingAIAnalysisRepository", return_value=mock_ai_repo), \
