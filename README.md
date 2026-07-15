@@ -5,6 +5,7 @@
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7.2-DC382D?logo=redis&logoColor=white)
+![Celery](https://img.shields.io/badge/Celery-5.x-378AFF?logo=celery&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Tests](https://img.shields.io/badge/Tests-2100+-blue)
@@ -298,6 +299,7 @@ pytest
 |---|---|
 | [README.md](README.md) | Project overview, features, setup, and usage |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Detailed architecture, module breakdown, request lifecycle, coding guidelines |
+| [API.md](API.md) | Details regarding the APIs |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
 | [LICENSE](LICENSE) | MIT License |
 
