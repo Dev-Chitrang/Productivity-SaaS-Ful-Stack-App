@@ -202,7 +202,7 @@ Each backend module follows a consistent layered pattern: `routes → controller
 ### Clone Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Dev-Chitrang/Productivity-SaaS-Ful-Stack-App.git
 cd productivity-app
 ```
 
