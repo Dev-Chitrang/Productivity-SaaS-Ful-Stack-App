@@ -2,7 +2,7 @@
 set -e
 
 # =============================================================================
-# Entrypoint: wait for Postgres → run migrations → start FastAPI
+# Entrypoint: wait for Postgres → configure workers → start FastAPI
 # =============================================================================
 
 PG_HOST="${POSTGRES_SERVER:-localhost}"
@@ -39,8 +39,24 @@ except Exception:
     sleep 1
 done
 
-echo "==> Running database migrations (alembic upgrade head)..."
-alembic upgrade head
+# --- Calculate uvicorn worker count from CPU cores ---
+export UVICORN_WORKERS=$(python -c "
+import os, math
+cores = os.cpu_count() or 1
+try:
+    with open('/sys/fs/cgroup/cpu.max') as f:
+        parts = f.read().split()
+        if parts[0] != 'max':
+            cgroup_cpus = math.ceil(int(parts[0]) / int(parts[1]))
+            if cgroup_cpus > 0:
+                cores = min(cores, cgroup_cpus)
+except (OSError, ValueError, ZeroDivisionError):
+    pass
+workers = max((cores * 2) + 1, 2)
+print(workers)
+")
+
+echo "==> UVICORN_WORKERS=${UVICORN_WORKERS} (CPU cores: $(python -c 'import os; print(os.cpu_count() or 1)'))"
 
 echo "==> Starting FastAPI application..."
 exec "$@"

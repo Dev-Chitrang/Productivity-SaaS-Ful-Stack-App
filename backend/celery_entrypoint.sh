@@ -2,7 +2,9 @@
 set -e
 
 # =============================================================================
-# Celery Entrypoint: wait for Postgres → run migrations → start Celery Worker
+# Celery Entrypoint: wait for Postgres → start Celery Worker
+# Database migrations are owned exclusively by the CI/CD pipeline (alembic
+# upgrade head) and are intentionally NOT executed here.
 # =============================================================================
 
 PG_HOST="${POSTGRES_SERVER:-localhost}"
@@ -35,9 +37,6 @@ except Exception:
     echo "    ...not ready yet (${elapsed}s elapsed). Retrying in 1s."
     sleep 1
 done
-
-echo "==> [Celery] Running database migrations (alembic upgrade head)..."
-alembic upgrade head
 
 echo "==> [Celery] Starting Celery Worker with Beat..."
 exec python start_celery.py

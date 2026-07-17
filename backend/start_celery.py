@@ -10,13 +10,21 @@ CELERY_APP = "app.workers.tasks.celery_app"
 
 
 def main():
+    from app.core.runtime import runtime
+
     backend_dir = os.path.dirname(os.path.abspath(__file__))
 
     worker_args = [
         sys.executable, "-m", "celery",
         "-A", CELERY_APP,
         "worker", "--loglevel=info",
+        f"--concurrency={runtime.celery.concurrency}",
+        f"--prefetch-multiplier={runtime.celery.prefetch_multiplier}",
     ]
+
+    if runtime.celery.max_tasks_per_child is not None:
+        worker_args.append(f"--max-tasks-per-child={runtime.celery.max_tasks_per_child}")
+
     if platform.system() == "Windows":
         worker_args.extend(["-P", "solo"])
 

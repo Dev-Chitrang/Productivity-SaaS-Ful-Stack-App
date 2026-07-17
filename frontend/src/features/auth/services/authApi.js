@@ -8,6 +8,7 @@ export const authApi = {
   verifyLoginOtp: (data) => api.post("/auth/verify-login", data),
   resendLoginOtp: (data) => api.post("/auth/resend-login-otp", data),
   refresh: (data) => api.post("/auth/refresh", data),
+  logout: () => api.post("/auth/logout"),
   forgotPassword: (data) => api.post("/auth/password-reset/initiate", data),
   resetPassword: (data) => api.post("/auth/password-reset/confirm", data),
   /** Sends a verified Google ID Token to the backend for login/signup. */

@@ -26,7 +26,7 @@ class ResendOtpRequest(BaseModel):
     verification_token: str
 
 class TokenRefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str | None = None
 
 class PasswordResetInitiate(BaseModel, StrictEmailMixin):
     email: EmailStr
@@ -37,7 +37,7 @@ class PasswordResetConfirm(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    refresh_token: str
+    refresh_token: str | None = None
     token_type: str = "bearer"
 
 class SignupResponse(BaseModel):

@@ -2,6 +2,8 @@ import { createContext, useContext, useState, useEffect, useCallback } from "rea
 import { userApi } from "@/features/auth/services/authApi"
 import { clearGuestSession } from "@/features/meetings/utils/guestSession"
 import { getBrowserTimezone } from "@/lib/timezone"
+import { getAccessToken, setAccessToken, clearAccessToken } from "@/lib/tokenStore"
+import api from "@/lib/axios"
 
 const AuthContext = createContext(null)
 
@@ -12,7 +14,7 @@ export function AuthProvider({ children }) {
   const isAuthenticated = !!user
 
   const fetchUser = useCallback(async () => {
-    const token = localStorage.getItem("access_token")
+    const token = getAccessToken()
     if (!token) {
       setIsLoading(false)
       return
@@ -20,24 +22,19 @@ export function AuthProvider({ children }) {
     try {
       const { data } = await userApi.getProfile()
 
-      // One-time automatic timezone sync for existing and new users.
-      // If the backend returned null (no preference set yet), silently push
-      // the browser timezone. No toast, no user interaction required.
       if (!data.timezone) {
         const browserTz = getBrowserTimezone()
         try {
           const { data: updated } = await userApi.updateProfile({ timezone: browserTz })
           setUser(updated)
         } catch {
-          // Non-critical — set user with null timezone; fallback logic in forms handles it.
           setUser(data)
         }
       } else {
         setUser(data)
       }
     } catch {
-      localStorage.removeItem("access_token")
-      localStorage.removeItem("refresh_token")
+      clearAccessToken()
       setUser(null)
     } finally {
       setIsLoading(false)
@@ -49,14 +46,17 @@ export function AuthProvider({ children }) {
   }, [fetchUser])
 
   const loginTokens = (tokens) => {
-    localStorage.setItem("access_token", tokens.access_token)
-    localStorage.setItem("refresh_token", tokens.refresh_token)
+    setAccessToken(tokens.access_token)
     fetchUser()
   }
 
-  const logout = () => {
-    localStorage.removeItem("access_token")
-    localStorage.removeItem("refresh_token")
+  const logout = async () => {
+    try {
+      await api.post("/auth/logout")
+    } catch {
+      // proceed with client-side cleanup regardless
+    }
+    clearAccessToken()
     clearGuestSession()
     setUser(null)
   }

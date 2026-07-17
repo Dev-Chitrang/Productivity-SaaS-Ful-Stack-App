@@ -9,12 +9,9 @@ services:
   # Frontend — React SPA served by nginx
   # ---------------------------------------------------------------------------
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-}
+    image: ${FRONTEND_IMAGE:-chitrangpotdar/productivity-frontend}:${IMAGE_TAG:-latest}
     container_name: saas_frontend
+    pull_policy: always
     ports:
       - "80:80"
     depends_on:
@@ -35,11 +32,9 @@ services:
   # Backend — FastAPI + Uvicorn
   # ---------------------------------------------------------------------------
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    image: saas_backend
+    image: ${BACKEND_IMAGE:-chitrangpotdar/productivity-backend}:${IMAGE_TAG:-latest}
     container_name: saas_backend
+    pull_policy: always
     env_file: .env
     ports:
       - "8000:8000"
@@ -65,7 +60,7 @@ services:
   # Celery Worker + Beat — shares Backend image
   # ---------------------------------------------------------------------------
   celery:
-    image: saas_backend
+    image: ${BACKEND_IMAGE:-chitrangpotdar/productivity-backend}:${IMAGE_TAG:-latest}
     container_name: saas_celery
     entrypoint: ["/app/celery_entrypoint.sh"]
     env_file: .env

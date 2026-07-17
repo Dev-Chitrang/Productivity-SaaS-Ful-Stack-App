@@ -27,3 +27,6 @@ pywebpush
 pytest
 pytest-cov
 pytest-asyncio
+ruff
+black
+isort

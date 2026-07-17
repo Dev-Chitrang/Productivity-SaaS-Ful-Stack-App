@@ -148,6 +148,15 @@ export function useGoogleOAuth({ onOtpRequired, onSuccess }) {
       return
     }
 
+    const handleAuthResult = (data) => {
+      if (data.requires_2fa && data.verification_token) {
+        onOtpRequired(data.verification_token, "login")
+      } else if (data.access_token) {
+        toast.success("Signed in with Google.")
+        onSuccess(data)
+      }
+    }
+
     const initAndPrompt = () => {
       window.google.accounts.id.initialize({
         client_id: clientId,
@@ -159,13 +168,7 @@ export function useGoogleOAuth({ onOtpRequired, onSuccess }) {
 
           try {
             const { data } = await googleMutation.mutateAsync(response.credential)
-
-            if (data.requires_2fa && data.verification_token) {
-              onOtpRequired(data.verification_token, "login")
-            } else if (data.access_token) {
-              toast.success("Signed in with Google.")
-              onSuccess(data)
-            }
+            handleAuthResult(data)
           } catch {
             // error toast already handled by onError above
           }
@@ -198,12 +201,7 @@ export function useGoogleOAuth({ onOtpRequired, onSuccess }) {
               }
               try {
                 const { data } = await googleMutation.mutateAsync(response.credential)
-                if (data.requires_2fa && data.verification_token) {
-                  onOtpRequired(data.verification_token, "login")
-                } else if (data.access_token) {
-                  toast.success("Signed in with Google.")
-                  onSuccess(data)
-                }
+                handleAuthResult(data)
               } catch { }
             },
             ux_mode: "popup",

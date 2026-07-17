@@ -103,6 +103,21 @@ class AuthController:
             logger.error("auth_refresh_failed error=%s", str(e))
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
 
+    async def handle_refresh_raw(self, refresh_token: str):
+        try:
+            return await self.service.refresh_access_session(refresh_token)
+        except PermissionError as e:
+            logger.error("auth_refresh_failed error=%s", str(e))
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+    async def handle_logout(self, refresh_token: str):
+        try:
+            logger.info("auth_logout initiated")
+            await self.service.logout(refresh_token)
+            logger.info("auth_logout_success")
+        except Exception as e:
+            logger.error("auth_logout_error error=%s", str(e))
+
     async def handle_password_reset_request(self, payload: PasswordResetInitiate):
         try:
             logger.info("auth_password_reset_initiate email=%s", payload.email)

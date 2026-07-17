@@ -1,6 +1,7 @@
 from typing import AsyncGenerator
 from redis.asyncio import ConnectionPool, Redis
 from app.core.config import settings
+from app.core.runtime import runtime
 from app.core.logger import logger
 
 # Global connection pool instance variable
@@ -8,7 +9,8 @@ redis_pool = ConnectionPool(
     host=settings.REDIS_HOST,
     port=settings.REDIS_PORT,
     db=1, # Separating operational session tokens cache on db index 1 (Celery uses 0)
-    decode_responses=False # Keeps raw binary byte stream formats intact
+    decode_responses=False, # Keeps raw binary byte stream formats intact
+    max_connections=runtime.redis_max_connections,
 )
 
 async def check_redis_health() -> None:

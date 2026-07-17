@@ -77,11 +77,11 @@ The Celery container reuses the backend image directly:
 
 ```yaml
 celery:
-  image: saas_backend        # same image built by the backend service
+  image: ${BACKEND_IMAGE}:${IMAGE_TAG}  # same image used by the backend service
   entrypoint: ["/app/celery_entrypoint.sh"]
 ```
 
-The `celery_entrypoint.sh` script waits for PostgreSQL, runs `alembic upgrade head`, then executes `start_celery.py` — which spawns both a Celery worker process and a Celery beat scheduler process. This avoids maintaining a separate Dockerfile for the background task runner.
+The `celery_entrypoint.sh` script waits for PostgreSQL then executes `start_celery.py` — which spawns both a Celery worker process and a Celery beat scheduler process. This avoids maintaining a separate Dockerfile for the background task runner.
 
 ---
 
@@ -96,16 +96,16 @@ The `celery_entrypoint.sh` script waits for PostgreSQL, runs `alembic upgrade he
 
 ### Backend (`saas_backend`)
 
-- **Image:** Custom-built from `backend/Dockerfile`.
+- **Image:** Pulled from DockerHub (`chitrangpotdar/productivity-backend`).
 - **Port:** `8000` (FastAPI/Uvicorn).
-- **Responsibility:** Serves the FastAPI application with Uvicorn (4 workers). On startup, the entrypoint waits for PostgreSQL, runs Alembic migrations, then launches the application. Handles all REST API endpoints, authentication (JWT, Google OAuth), file uploads/downloads, WebSocket signaling for meetings, and email sending (via Mailpit in local, or Brevo in production).
+- **Responsibility:** Serves the FastAPI application with Uvicorn. On startup, the entrypoint waits for PostgreSQL then launches the application. Handles all REST API endpoints, authentication (JWT, Google OAuth), file uploads/downloads, WebSocket signaling for meetings, and email sending (via Mailpit in local, or Brevo in production).
 - **Health check:** HTTP request to `/health` via Python `urllib` every 15s.
 - **Volumes:** Mounts `logs_data` at `/app/logs` and `uploads_data` at `/app/downloads`.
 - **Environment:** Reads all configuration from `.env` via `env_file`.
 
 ### Celery (`saas_celery`)
 
-- **Image:** Reuses the `saas_backend` image (no separate build).
+- **Image:** Reuses the backend image from DockerHub (`chitrangpotdar/productivity-backend`).
 - **Responsibility:** Runs background tasks and scheduled jobs. The entrypoint spawns two processes via `start_celery.py`:
   - **Celery Worker** — executes queued tasks (email sending, meeting transcript analysis, notification delivery, etc.).
   - **Celery Beat** — schedules periodic tasks (e.g., recurring reminders, cleanup jobs).

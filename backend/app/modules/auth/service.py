@@ -302,3 +302,15 @@ class AuthService:
         new_tokens = SecurityEngine.generate_auth_tokens(user_id, email)
         await self.redis.setex(f"session:{user_id}", 604800, new_tokens["refresh_token"])
         return new_tokens
+
+    # ------------------------------------------------------------------
+    # Logout
+    # ------------------------------------------------------------------
+
+    async def logout(self, refresh_token: str) -> None:
+        try:
+            payload = jwt.decode(refresh_token, settings.JWT_REFRESH_SECRET_KEY, algorithms=["HS256"])
+            user_id = payload["sub"]
+            await self.redis.delete(f"session:{user_id}")
+        except jwt.PyJWTError:
+            pass
