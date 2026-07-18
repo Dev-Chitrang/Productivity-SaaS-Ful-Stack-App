@@ -128,10 +128,9 @@ class TestReminderRepository:
         assert len(result) == 1
 
     async def test_fetch_tasks_for_reminders(self, repo, db):
-        with patch("app.models.tasks.Task.is_completed", False, create=True):
-            today = date.today()
-            mock_result = MagicMock()
-            mock_result.scalars.return_value.all.return_value = [MagicMock(spec=Task)]
-            db.execute.return_value = mock_result
-            result = await repo.fetch_tasks_for_reminders(today)
-            assert len(result) == 1
+        today = date.today()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [MagicMock(spec=Task)]
+        db.execute.return_value = mock_result
+        result = await repo.fetch_tasks_for_reminders(today)
+        assert len(result) == 1

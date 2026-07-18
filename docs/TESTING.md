@@ -302,7 +302,7 @@ The project does not maintain a published coverage badge or minimum threshold in
 **What is tested:**
 - Registration with OTP verification and resend
 - Login with 2FA challenge and OTP verification
-- Google OAuth token verification, account linking, and login
+- Google Identity Services (GIS) token verification, account linking, and login
 - Password reset initiation and confirmation
 - Token refresh with Redis session whitelist
 - Route-level HTTP status codes and response schemas
@@ -533,7 +533,7 @@ No external APIs are contacted during test execution. All network, filesystem, a
 
 - `SMTPEmailProvider` is tested with `smtplib.SMTP` patched. The mock verifies `sendmail`, `starttls`, and `login` calls without opening a real network connection.
 
-### Google OAuth
+### Google Identity Services (GIS)
 
 - Google ID token verification is never executed in tests. `google.oauth2.id_token.verify_oauth2_token` is patched.
 - OAuth flows are tested through `AuthService` with mocked repository and Redis.

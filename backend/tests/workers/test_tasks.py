@@ -312,12 +312,10 @@ class TestProcessAllReminders:
         assert process_all_reminders.name == "tasks.process_all_reminders"
 
     @patch("app.workers.tasks._run_all_reminder_scans", new_callable=AsyncMock)
-    @patch("app.workers.tasks.asyncio", create=True)
+    @patch("app.workers.tasks.asyncio")
     def test_process_all_reminders_runs_scan(self, mock_asyncio, mock_scan):
-        mock_loop = MagicMock()
-        mock_asyncio.get_event_loop.return_value = mock_loop
         process_all_reminders()
-        mock_loop.run_until_complete.assert_called_once()
+        mock_asyncio.run.assert_called_once()
 
     @patch("app.workers.tasks.send_async_email")
     @patch("app.workers.tasks.async_session_factory", create=True)

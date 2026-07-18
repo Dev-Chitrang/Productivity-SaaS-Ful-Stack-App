@@ -14,6 +14,7 @@ services:
     pull_policy: always
     ports:
       - "80:80"
+      - "443:443"
     depends_on:
       backend:
         condition: service_healthy
@@ -27,6 +28,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /etc/nginx/custom/allowed_ips.conf:/etc/nginx/custom/allowed_ips.conf:ro
 
   # ---------------------------------------------------------------------------
   # Backend — FastAPI + Uvicorn
@@ -36,8 +40,8 @@ services:
     container_name: saas_backend
     pull_policy: always
     env_file: .env
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -131,10 +135,13 @@ services:
 
   # ---------------------------------------------------------------------------
   # Mailpit — local SMTP catcher (LOCAL environment only)
+  # Start with: docker compose --profile local up -d
   # ---------------------------------------------------------------------------
   mailpit:
     image: axllent/mailpit:v1.15
     container_name: saas_mailpit
+    profiles:
+      - local
     ports:
       - "1025:1025"
       - "8025:8025"
@@ -149,6 +156,20 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+
+  # ---------------------------------------------------------------------------
+  # Adminer — database management tool
+  # ---------------------------------------------------------------------------
+  adminer:
+    image: adminer:latest
+    container_name: saas_adminer
+    restart: unless-stopped
+
+    networks:
+      - backend_net
+
+    depends_on:
+      - postgres
 
 
 # =============================================================================

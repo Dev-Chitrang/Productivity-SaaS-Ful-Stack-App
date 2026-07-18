@@ -8,14 +8,15 @@ The SaaS Productivity Suite is a full-stack collaborative productivity platform.
 flowchart TB
     subgraph Frontend["Frontend — React SPA"]
         direction TB
-        FE["Vite + React + Tailwind"]
+        FE["Vite + React 19 + Tailwind CSS 4"]
         Auth["AuthContext + Axios Interceptors"]
         WS["WebSocket Client (Signaling)"]
         RTCMgr["RTCMeshManager (WebRTC)"]
     end
 
-    subgraph Ingress["Ingress"]
-        Nginx["Nginx :80"]
+    subgraph Ingress["Ingress — Nginx Reverse Proxy"]
+        Nginx["Nginx :80/:443"]
+        TLS["Let's Encrypt TLS"]
     end
 
     subgraph Backend["Backend — FastAPI + Uvicorn"]
@@ -23,13 +24,13 @@ flowchart TB
         WS_B["WebSocket Router"]
         MW["Middleware (CORS, Logging)"]
         Core["Core (DB, Redis, Security, RateLimit)"]
-        Modules["Feature Modules"]
+        Modules["12 Feature Modules"]
         Workers["Celery Workers + Beat"]
     end
 
     subgraph Data["Data & Infrastructure"]
         PG["PostgreSQL 16 (asyncpg)"]
-        Redis["Redis 7 (cache + broker)"]
+        Redis["Redis 7.2 (cache + broker)"]
         S3["Storage (Local / S3)"]
         SMTP["Email (SMTP / Brevo)"]
         NIM["NVIDIA NIM LLM API"]
@@ -39,8 +40,8 @@ flowchart TB
     Auth --> API
     WS --> WS_B
     RTCMgr --> WS_B
-    Nginx --> API
-    Nginx --> WS_B
+    Nginx -->|/api/*| API
+    Nginx -->|/ws/*| WS_B
 
     API --> MW
     MW --> Core
@@ -63,17 +64,17 @@ flowchart TB
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 18, Vite, Tailwind CSS, shadcn/ui, React Query (TanStack), Phosphor Icons |
-| Backend | Python 3.10, FastAPI, SQLAlchemy 2.0 (async), Pydantic v2, pydantic-settings |
+| Frontend | React 19, Vite 8, Tailwind CSS 4, shadcn/ui (Radix), Tiptap 3, Konva, Recharts, Framer Motion, React Query (TanStack), Phosphor Icons |
+| Backend | Python 3.11, FastAPI, SQLAlchemy 2.0 (async), Pydantic v2, pydantic-settings |
 | Database | PostgreSQL 16 (asyncpg driver, SQLAlchemy async) |
-| Cache/Broker | Redis 7 (connection pool, Celery broker, session tokens, rate limiting) |
+| Cache/Broker | Redis 7.2 (connection pool, Celery broker, session tokens, rate limiting) |
 | Task Queue | Celery + Beat (autoretry, retry backoff) |
 | Storage | Local filesystem (LOCAL) / AWS S3 (PRODUCTION) via Strategy pattern |
 | Email | SMTP + Mailpit (LOCAL) / Brevo (PRODUCTION) |
 | Real-time | WebSockets (FastAPI) + WebRTC mesh (browser-native) |
 | AI | NVIDIA NIM (`meta/llama-3.3-70b-instruct`) via OpenAI-compatible client |
-| Auth | JWT (HS256, access 15 min, refresh 7 days) + Google OAuth 2.0 + 2FA OTP |
-| Infra | Docker Compose, Nginx |
+| Auth | JWT (HS256, access 15 min, refresh 7 days) + Google Identity Services (popup flow) + 2FA OTP |
+| Infra | Docker Compose, Nginx (reverse proxy + TLS), Let's Encrypt |
 
 ---
 
@@ -420,41 +421,49 @@ flowchart TD
 
 ```mermaid
 flowchart TB
-    subgraph "saas_frontend_net"
-        Frontend["frontend (nginx :80)"]
+    Browser["Browser"] -->|"HTTPS :443"| Nginx
+
+    subgraph "Nginx Container (saas_frontend)"
+        Nginx["nginx :80/:443"]
+        React["React SPA (static)"]
+        Nginx --> React
     end
 
-    subgraph "saas_backend_net"
-        Backend["backend (FastAPI :8000)"]
-        Celery["celery (Beat + Worker)"]
-        Postgres["postgres (5432)"]
-        Redis["redis (6379)"]
-        Mailpit["mailpit (1025 SMTP, 8025 UI)"]
+    Nginx -->|"/api/*"| Backend
+    Nginx -->|"/ws/*"| Backend
+
+    subgraph "Backend Container (saas_backend)"
+        Backend["FastAPI + Uvicorn :8000"]
     end
 
-    Frontend --> Backend
-    Frontend -->|static assets| Nginx
+    subgraph "Celery Container (saas_celery)"
+        Celery["Celery Worker + Beat"]
+    end
+
+    subgraph "Data Tier"
+        Postgres[("PostgreSQL 16")]
+        Redis[("Redis 7.2")]
+    end
+
     Backend --> Postgres
     Backend --> Redis
-    Backend --> Mailpit
     Celery --> Postgres
     Celery --> Redis
-    Celery --> Mailpit
 
+    style Nginx fill:#059669,color:#fff
     style Backend fill:#2563eb,color:#fff
     style Celery fill:#7c3aed,color:#fff
-    style Frontend fill:#059669,color:#fff
     style Postgres fill:#dc2626,color:#fff
     style Redis fill:#ea580c,color:#fff
 ```
 
 **Services**:
-- `frontend` — React build served by Nginx, depends on backend health.
-- `backend` — FastAPI + Uvicorn, mounts `logs_data` and `uploads_data` volumes.
+- `frontend` — React SPA served by Nginx with TLS termination. Reverse-proxies `/api/` and `/ws/` to the backend. Depends on backend health.
+- `backend` — FastAPI + Uvicorn with dynamic worker count. Mounts `logs_data` and `uploads_data` volumes.
 - `celery` — Shares the backend image; runs `celery_entrypoint.sh` for Beat + Worker.
 - `postgres` — Primary data store with persistent volume.
 - `redis` — Cache + Celery broker with AOF persistence.
-- `mailpit` — SMTP catcher for local development.
+- `mailpit` — SMTP catcher for local development (opt-in via `--profile local`).
 
 ---
 
@@ -804,7 +813,7 @@ It uses React Query for parallel data fetching and aggregates results client-sid
 | Session Management | Redis whitelist (`session:{user_id}`) — revoked on password change / deactivation |
 | Password Hashing | `pwdlib` + `BcryptHasher` |
 | 2FA | 6-digit OTP via email, stored in Redis with TTL |
-| OAuth | Google ID Token verification server-side (`google.oauth2.id_token.verify_oauth2_token`) |
+| OAuth | Google Identity Services — popup flow, ID token verified server-side with `google.oauth2.id_token.verify_oauth2_token` |
 | Authorization | Per-module checks (host-only, participant-only, owner-only) |
 | Rate Limiting | Redis sliding window per endpoint/IP/user |
 | CORS | `allow_origins=["*"]` with credentials (intended for nginx reverse proxy in production) |
@@ -820,7 +829,7 @@ It uses React Query for parallel data fetching and aggregates results client-sid
 | `tasks.send_meeting_push_reminders` | Every 60s | Finds scheduled meetings starting within 10 minutes and sends browser push notifications + in-app notifications. |
 | `tasks.analyze_meeting_transcript` | On-demand (triggered on meeting end) | Reads transcript, runs NVIDIA NIM AI analysis, persists results, creates suggested tasks, sends completion email. |
 | `tasks.send_async_email` | On-demand | Sends plain-text email via SMTP/Brevo with autoretry. |
-| `tasks.send_html_email` | On-demand | Sends HTML email with optional attachments. |
+| `tasks.send_html_email` | On-demand | Sends HTML email with optional attachments via SMTP/Brevo with autoretry. |
 
 ---
 
@@ -834,7 +843,8 @@ It uses React Query for parallel data fetching and aggregates results client-sid
 | **Background** | Celery + Redis broker + Beat scheduler |
 | **Storage** | Strategy pattern (Local vs S3), validated uploads |
 | **Email** | Strategy pattern (SMTP vs Brevo), async via Celery |
-| **Auth** | JWT + Google OAuth + Redis session whitelist + 2FA OTP |
+| **Auth** | JWT + Google Identity Services + Redis session whitelist + 2FA OTP |
 | **AI** | NVIDIA NIM (Llama 3.3 70B), triggered by Celery on meeting end |
 | **Rate Limiting** | Redis sliding window, fails open |
 | **Frontend** | React Query for server state, Axios interceptors for token refresh, feature-first organization |
+| **Deployment** | Docker Compose, Nginx reverse proxy with TLS, Let's Encrypt, DuckDNS |

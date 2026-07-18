@@ -39,8 +39,12 @@ except Exception:
     sleep 1
 done
 
-# --- Calculate uvicorn worker count from CPU cores ---
-export UVICORN_WORKERS=$(python -c "
+# --- Configure uvicorn workers ---
+# Production: allow UVICORN_WORKERS override, else compute from CPU cores.
+# Non-production: leave unset so the Dockerfile CMD defaults to 1 worker.
+if [ "${ENVIRONMENT}" = "PRODUCTION" ]; then
+    if [ -z "${UVICORN_WORKERS}" ]; then
+        export UVICORN_WORKERS=$(python -c "
 import os, math
 cores = os.cpu_count() or 1
 try:
@@ -55,8 +59,11 @@ except (OSError, ValueError, ZeroDivisionError):
 workers = max((cores * 2) + 1, 2)
 print(workers)
 ")
-
-echo "==> UVICORN_WORKERS=${UVICORN_WORKERS} (CPU cores: $(python -c 'import os; print(os.cpu_count() or 1)'))"
+    fi
+    echo "==> PRODUCTION — UVICORN_WORKERS=${UVICORN_WORKERS}"
+else
+    echo "==> ${ENVIRONMENT:-LOCAL} — single-worker mode"
+fi
 
 echo "==> Starting FastAPI application..."
 exec "$@"

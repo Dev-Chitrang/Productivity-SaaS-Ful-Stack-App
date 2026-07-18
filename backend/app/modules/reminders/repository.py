@@ -8,6 +8,7 @@ from app.models.meetings import Meeting
 from app.models.calender import CalendarEvent
 from app.models.tasks import Task
 from app.modules.meetings.enums import MeetingType, MeetingStatus
+from app.modules.tasks.enums import TaskStatus
 
 MODULE_CONFIG_KEYS = {"calendar_config", "tasks_config", "meetings_config"}
 
@@ -81,10 +82,12 @@ class ReminderRepository:
         return list((await self.db.execute(stmt)).scalars().all())
 
     async def fetch_tasks_for_reminders(self, current_date_marker: date) -> List[Task]:
-        """Fetches tasks that are due today, upcoming tomorrow, or overdue."""
+        """Fetches tasks that are due today or overdue and eligible for reminders."""
         stmt = select(Task).where(
             and_(
-                Task.is_completed == False,
+                Task.status != TaskStatus.DONE,
+                Task.is_archived == False,
+                Task.deleted_at.is_(None),
                 Task.due_date <= current_date_marker + timedelta(days=1)
             )
         )

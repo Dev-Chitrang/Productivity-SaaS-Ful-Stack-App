@@ -225,8 +225,44 @@ jobs:
           tags: |
             ${{ env.BACKEND_IMAGE }}:latest
             ${{ env.BACKEND_IMAGE }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
+
+      - name: Extract and validate VITE build variables from APP_ENV
+        env:
+          APP_ENV: ${{ secrets.APP_ENV }}
+        run: |
+          echo "==> Parsing APP_ENV for VITE_* build variables..."
+
+          # Validate APP_ENV is valid JSON
+          if ! echo "$APP_ENV" | jq empty 2>/dev/null; then
+            echo "::error::APP_ENV is not valid JSON. Aborting."
+            exit 1
+          fi
+
+          # Discover every key whose name starts with VITE_
+          VITE_KEYS=$(echo "$APP_ENV" | jq -r 'keys[] | select(startswith("VITE_"))')
+
+          if [ -z "$VITE_KEYS" ]; then
+            echo "::error::No VITE_* variables found in APP_ENV. At least one is required for the frontend build."
+            exit 1
+          fi
+
+          echo "==> Discovered VITE_* variables in APP_ENV:"
+          echo "$VITE_KEYS" | while IFS= read -r key; do
+            value=$(echo "$APP_ENV" | jq -r --arg k "$key" '.[$k] // ""')
+            if [ -z "$value" ]; then
+              echo "    $key = (empty — will resolve to empty string at build time)"
+            else
+              echo "    $key = ${value:0:4}***"
+            fi
+          done
+
+          # Generate vite.env — one KEY=VALUE line per VITE_* entry
+          echo "$APP_ENV" \
+            | jq -r 'to_entries[] | select(.key | startswith("VITE_")) | "\(.key)=\(.value)"' \
+            > frontend/vite.env
+
+          echo "==> vite.env written ($(wc -l < frontend/vite.env) variables)"
 
       - name: Build and push frontend image
         uses: docker/build-push-action@v6
@@ -234,13 +270,10 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: true
-          build-args: |
-            VITE_API_URL=${{ vars.VITE_API_URL }}
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          no-cache: true
 
   # =============================================================================
   # PHASE 4 — Deploy

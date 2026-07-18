@@ -21,9 +21,8 @@ jinja2
 openai
 python-magic
 brevo-python
-boto3
-aioboto3
-pywebpush
+aioboto3>=13.0.0
+pywebpush>=2.3.0
 pytest
 pytest-cov
 pytest-asyncio

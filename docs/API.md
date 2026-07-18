@@ -95,7 +95,7 @@ Tokens are HS256-signed JSON Web Tokens containing:
 3. **Login** — `POST /auth/login` with email and password. If 2FA is enabled, returns a `verification_token`; otherwise returns tokens directly.
 4. **Verify Login (2FA)** — `POST /auth/verify-login` with the OTP returns access and refresh tokens.
 5. **Refresh** — `POST /auth/refresh` with a valid refresh token returns new access and refresh tokens.
-6. **Google OAuth** — `POST /auth/google` with a Google ID token returns tokens (or a 2FA verification token).
+6. **Google Identity Services** — `POST /auth/google` with a Google ID token (popup flow) returns tokens (or a 2FA verification token).
 
 ### Two-Factor Authentication
 
@@ -289,7 +289,7 @@ All endpoints are prefixed with `/api/v1/auth`.
 
 #### `POST /auth/google`
 
-Authenticate or register via Google OAuth.
+Authenticate or register via Google Identity Services (popup flow).
 
 | | |
 |---|---|

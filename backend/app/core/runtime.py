@@ -67,7 +67,8 @@ CPU_CORES: int = _detect_cpu_cores()
 # -- Uvicorn ----------------------------------------------------------------
 # Recommended: (CPU_CORES * 2) + 1.  Minimum 2 so that one worker can serve
 # requests while the other handles periodic housekeeping.
-UVICORN_WORKERS: int = max((CPU_CORES * 2) + 1, 2)
+_env_override = os.environ.get("UVICORN_WORKERS")
+UVICORN_WORKERS: int = max(int(_env_override), 1) if _env_override else max((CPU_CORES * 2) + 1, 2)
 
 # -- SQLAlchemy connection pool ---------------------------------------------
 # pool_size:        persistent connections per worker.  We budget ~10 % of

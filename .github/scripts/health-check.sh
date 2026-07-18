@@ -4,22 +4,26 @@ set -euo pipefail
 # =============================================================================
 # health-check.sh — Verify backend and frontend are responding
 #
+# The backend is NOT exposed to the EC2 host (internal Docker networking only).
+# Backend health is verified through the nginx reverse proxy at /api/health,
+# which validates the full chain: nginx → docker networking → backend.
+#
 # Usage: health-check.sh <deploy_path>
 # =============================================================================
 
 DEPLOY_PATH="${1:?Usage: health-check.sh <deploy_path>}"
 COMPOSE_FILE="${DEPLOY_PATH}/docker-compose.yml"
-BACKEND_URL="http://localhost:8000"
-FRONTEND_URL="http://localhost:80"
+HEALTH_URL="https://localhost/api/health"
+FRONTEND_URL="https://localhost/nginx-health"
 MAX_RETRIES=30
 RETRY_INTERVAL=5
 
 echo "==> Running health checks..."
 
-# --- Backend health check ---
-echo "    Checking backend at ${BACKEND_URL}/health ..."
+# --- Backend health check (through nginx reverse proxy) ---
+echo "    Checking backend at ${HEALTH_URL} ..."
 for i in $(seq 1 ${MAX_RETRIES}); do
-    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${BACKEND_URL}/health" 2>/dev/null || echo "000")
+    HTTP_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" "${HEALTH_URL}" 2>/dev/null || echo "000")
     if [ "${HTTP_STATUS}" = "200" ]; then
         echo "    [OK] Backend is healthy (HTTP ${HTTP_STATUS})"
         break
@@ -35,9 +39,9 @@ for i in $(seq 1 ${MAX_RETRIES}); do
 done
 
 # --- Frontend health check ---
-echo "    Checking frontend at ${FRONTEND_URL}/nginx-health ..."
+echo "    Checking frontend at ${FRONTEND_URL} ..."
 for i in $(seq 1 ${MAX_RETRIES}); do
-    HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${FRONTEND_URL}/nginx-health" 2>/dev/null || echo "000")
+    HTTP_STATUS=$(curl -sk -o /dev/null -w "%{http_code}" "${FRONTEND_URL}" 2>/dev/null || echo "000")
     if [ "${HTTP_STATUS}" = "200" ]; then
         echo "    [OK] Frontend is healthy (HTTP ${HTTP_STATUS})"
         break

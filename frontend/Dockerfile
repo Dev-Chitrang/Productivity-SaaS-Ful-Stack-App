@@ -8,11 +8,14 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
-ARG VITE_API_URL=
-ENV VITE_API_URL=${VITE_API_URL}
-
+# Vite build-time variables are injected via vite.env, which is generated
+# dynamically by CI from APP_ENV. Every key in APP_ENV that starts with
+# VITE_ is written into this file and sourced into the shell environment
+# before the build. This approach is future-proof: adding a new VITE_*
+# variable to APP_ENV requires zero Dockerfile changes.
 COPY . .
-RUN npm run build
+COPY vite.env /tmp/vite.env
+RUN set -a && . /tmp/vite.env && set +a && npm run build
 
 
 # =============================================================================

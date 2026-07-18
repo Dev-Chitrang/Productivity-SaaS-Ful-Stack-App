@@ -54,7 +54,7 @@ The application is fully containerized using Docker Compose. The architecture fo
 - Creates a non-root `appuser` (UID 1000) for security.
 - Copies application code: `app/`, `alembic/`, `alembic.ini`, `entrypoint.sh`, `celery_entrypoint.sh`.
 - Creates `/app/downloads` and `/app/logs` directories owned by `appuser`.
-- Runs `entrypoint.sh` as the ENTRYPOINT (waits for Postgres, runs migrations, then starts Uvicorn with 4 workers on port 8000).
+- Runs `entrypoint.sh` as the ENTRYPOINT (waits for Postgres, starts Uvicorn with dynamic workers on port 8000).
 
 ### Frontend
 
@@ -189,7 +189,7 @@ PostgreSQL + Redis  (start in parallel)
 
 **2. Backend** — Waits for both Postgres and Redis to report healthy. The `entrypoint.sh` script then performs a socket-level connection check (retrying up to 30 seconds) as a second layer of protection. Once confirmed, Alembic runs `upgrade head` to apply any pending migrations, then Uvicorn starts serving the FastAPI application.
 
-**3. Celery** — Waits for the backend, Postgres, and Redis. Its own `celery_entrypoint.sh` independently verifies Postgres connectivity, runs migrations, then starts the Celery worker and beat processes via `start_celery.py`.
+**3. Celery** — Waits for the backend, Postgres, and Redis. Its own `celery_entrypoint.sh` independently verifies Postgres connectivity, then starts the Celery worker and beat processes via `start_celery.py`. Migrations are intentionally NOT run here — they are handled by the CI/CD pipeline and the backend entrypoint.
 
 **4. Frontend** — Waits for the backend to be healthy. Once the backend is ready, nginx starts and begins serving the React SPA and proxying requests to the backend.
 

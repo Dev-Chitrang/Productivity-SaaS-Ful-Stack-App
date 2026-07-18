@@ -395,7 +395,7 @@ Comprehensive test suite and production-ready Dockerization.
 
 ### Infrastructure
 
-- Backend Dockerfile: multi-stage build with Python 3.11-slim, uv package manager, non-root `appuser`, libmagic1 for MIME detection, 4 Uvicorn workers.
+- Backend Dockerfile: multi-stage build with Python 3.11-slim, uv package manager, non-root `appuser`, libmagic1 for MIME detection, dynamic Uvicorn workers (computed from CPU cores in production).
 - Frontend Dockerfile: multi-stage build with Node 22-alpine, npm ci, Vite production build, nginx stable-alpine for static serving.
 - Docker Compose with 6 services: frontend (nginx:80), backend (FastAPI:8000), Celery worker+beat, PostgreSQL 16-alpine, Redis 7.2-alpine, Mailpit (SMTP catcher on ports 1025/8025).
 - Nginx configuration for SPA routing with proxy pass to backend API.

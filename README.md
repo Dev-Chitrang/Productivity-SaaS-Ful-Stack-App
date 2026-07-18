@@ -1,6 +1,6 @@
 # Productivity Suite
 
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
@@ -9,7 +9,8 @@
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Tests](https://img.shields.io/badge/Tests-2100+-blue)
-![CI](https://github.com/Dev-Chitrang/Productivity-SaaS-Ful-Stack-App/actions/workflows/ci.yml/badge.svg?branch=main)
+![CI](https://github.com/Dev-Chitrang/Productivity-SaaS-Ful-Stack-App/actions/workflows/ci-cd.yml/badge.svg?branch=main)
+[![Live](https://img.shields.io/badge/Live-unified--workspace.duckdns.org-059669)](https://unified-workspace.duckdns.org)
 
 A modular, full-stack productivity application that combines task management, note-taking, calendar scheduling, audio meetings with WebRTC, collaborative whiteboarding, AI-powered meeting analysis, and cross-entity relations into a single self-hosted platform. Built with a React frontend and a Python FastAPI backend, designed for individuals and small teams who want to replace scattered SaaS tools.
 
@@ -139,12 +140,12 @@ A modular, full-stack productivity application that combines task management, no
 | Layer | Technology |
 |---|---|
 | **Frontend** | React 19, Vite 8, react-router-dom 7, TanStack React Query 5, Axios, react-hook-form + zod, Tailwind CSS 4, shadcn/ui (Radix), Tiptap 3, Konva, Recharts, Framer Motion, dayjs |
-| **Backend** | Python 3.10+, FastAPI, Uvicorn (4 workers), SQLAlchemy (async), Pydantic v2, PyJWT (HS256), pwdlib (bcrypt), Celery (Redis broker), OpenAI SDK (NVIDIA NIM), pywebpush (VAPID) |
+| **Backend** | Python 3.11+, FastAPI, Uvicorn (dynamic workers), SQLAlchemy (async), Pydantic v2, PyJWT (HS256), pwdlib (bcrypt), Celery (Redis broker), OpenAI SDK (NVIDIA NIM), pywebpush (VAPID) |
 | **Database** | PostgreSQL 16 (asyncpg), Alembic (async), Redis 7.2 |
 | **Storage** | Local filesystem (aiofiles) or AWS S3 (aioboto3, presigned URLs) |
 | **Email** | Brevo API (production) / Mailpit (development) |
-| **OAuth** | Google OpenID Connect (server-side token verification) |
-| **Docker** | 6-service Compose stack: Frontend (nginx), Backend, Celery, PostgreSQL, Redis, Mailpit |
+| **OAuth** | Google Identity Services (popup flow, ID token verification) |
+| **Docker** | 6-service Compose stack: Frontend (nginx), Backend, Celery, PostgreSQL, Redis, Mailpit (opt-in) |
 
 ---
 
@@ -155,7 +156,7 @@ productivity-app/
 ├── backend/
 │   ├── app/
 │   │   ├── core/           # Config, database, security, Redis, storage, WebSocket, middleware, rate limiter
-│   │   ├── models/         # SQLAlchemy ORM models (12 tables)
+│   │   ├── models/         # SQLAlchemy ORM models (19 tables)
 │   │   ├── modules/        # 12 feature modules: auth, users, calender, notes, tasks, meetings,
 │   │   │                   #   whiteboard, attachments, entity_links, ai_suggestions, notifications, reminders
 │   │   ├── workers/        # Celery async tasks
@@ -180,12 +181,19 @@ productivity-app/
 │
 ├── docker-compose.yml      # Full stack orchestration (6 services)
 ├── .env.example            # Environment variable reference
-├── ARCHITECTURE.md         # Detailed architecture documentation
+├── docs/
+│   ├── ARCHITECTURE.md     # Detailed architecture documentation
+│   ├── API.md              # Complete HTTP endpoint reference
+│   ├── DOCKERIZATION.md    # Docker container and service documentation
+│   ├── TESTING.md          # Backend test suite overview and execution guide
+│   ├── SCOPE.md            # Product scope and feature boundaries
+│   ├── production.md       # Production deployment guide
+│   └── google-oauth.md     # Google Identity Services integration
 ├── CHANGELOG.md            # Version history
 └── LICENSE                 # MIT License
 ```
 
-Each backend module follows a consistent layered pattern: `routes → controller → service → repository`, with Pydantic schemas, dependency injection, enums, exceptions, and constants. Each frontend feature module contains pages, components, hooks, API functions, schemas, and utilities. See [ARCHITECTURE.md](ARCHITECTURE.md) for a complete breakdown.
+Each backend module follows a consistent layered pattern: `routes → controller → service → repository`, with Pydantic schemas, dependency injection, enums, exceptions, and constants. Each frontend feature module contains pages, components, hooks, API functions, schemas, and utilities. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for a complete breakdown.
 
 ---
 
@@ -193,9 +201,9 @@ Each backend module follows a consistent layered pattern: `routes → controller
 
 ### Prerequisites
 
-- Python 3.10+
-- Node.js 20+
-- PostgreSQL 15+
+- Python 3.11+
+- Node.js 22+
+- PostgreSQL 16+
 - Redis 7+
 - Docker & Docker Compose (recommended)
 
@@ -226,7 +234,7 @@ Start the entire stack with a single command:
 docker compose up -d
 ```
 
-This starts all 6 services (Frontend, Backend, Celery, PostgreSQL, Redis, Mailpit). The backend entrypoint automatically waits for PostgreSQL and runs migrations. The frontend is served at `http://localhost` with API and WebSocket proxying to the backend.
+This starts all services (Frontend, Backend, Celery, PostgreSQL, Redis). Mailpit is opt-in and requires the `local` profile. The backend entrypoint waits for PostgreSQL before starting. The frontend is served at `http://localhost` with API and WebSocket proxying to the backend.
 
 ### Manual Development
 
@@ -243,7 +251,7 @@ alembic upgrade head
 # Backend
 uvicorn app.main:app --reload --port 8000
 
-# Celery worker (email tasks, AI analysis)
+# Celery worker (email tasks, reminders, AI analysis, push notifications)
 celery -A app.workers.tasks.celery_app worker --loglevel=info
 
 # Frontend (in a separate terminal)
@@ -265,18 +273,18 @@ The backend has 100+ test files with 2100+ test cases covering services, control
 
 ## Docker
 
-The root `docker-compose.yml` orchestrates the full stack with 6 services, health checks, and persistent volumes.
+The root `docker-compose.yml` orchestrates the full stack with health checks, persistent volumes, and TLS termination.
 
 | Service | Port | Description |
 |---|---|---|
-| Frontend | 80 | React SPA served by nginx |
-| Backend | 8000 | FastAPI + Uvicorn |
+| Frontend | 80 / 443 | React SPA served by nginx with TLS |
+| Backend | 8000 | FastAPI + Uvicorn (dynamic workers) |
 | Celery | -- | Worker + Beat (shared backend image) |
 | PostgreSQL | 5432 | Primary data store |
 | Redis | 6379 | Cache, sessions, Celery broker |
-| Mailpit | 1025 / 8025 | Dev SMTP catcher / Web UI |
+| Mailpit | 1025 / 8025 | Dev SMTP catcher / Web UI (opt-in) |
 
-The frontend nginx reverse-proxies `/api/` and `/ws/` to the backend. The backend entrypoint waits for PostgreSQL, runs Alembic migrations, then starts Uvicorn. See the [backend Dockerfile](backend/Dockerfile) and [frontend Dockerfile](frontend/Dockerfile) for multi-stage build details.
+The frontend nginx reverse-proxies `/api/` and `/ws/` to the backend. The backend entrypoint waits for PostgreSQL before starting Uvicorn. Database migrations are managed by the CI/CD pipeline. See the [backend Dockerfile](backend/Dockerfile) and [frontend Dockerfile](frontend/Dockerfile) for multi-stage build details.
 
 ---
 
@@ -298,9 +306,14 @@ pytest
 | Document | Description |
 |---|---|
 | [README.md](README.md) | Project overview, features, setup, and usage |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Detailed architecture, module breakdown, request lifecycle, coding guidelines |
-| [API.md](API.md) | Details regarding the APIs |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Detailed architecture, module breakdown, request lifecycle, coding guidelines |
+| [API.md](docs/API.md) | Complete HTTP endpoint reference |
 | [CHANGELOG.md](CHANGELOG.md) | Version history and release notes |
+| [DOCKERIZATION.md](docs/DOCKERIZATION.md) | Docker container and service documentation |
+| [TESTING.md](docs/TESTING.md) | Backend test suite overview and execution guide |
+| [SCOPE.md](docs/SCOPE.md) | Product scope and feature boundaries |
+| [PRODUCTION.md](docs/production.md) | Production deployment guide |
+| [GOOGLE-OAUTH.md](docs/google-oauth.md) | Google Identity Services integration |
 | [LICENSE](LICENSE) | MIT License |
 
 ---
@@ -321,10 +334,10 @@ pytest
 
 | Aspect | Status |
 |---|---|
-| **Current Version** | 1.6.1 |
+| **Current Version** | 2.4.0 |
 | **Development Status** | Active development |
 | **Backend Tests** | 2100+ test cases across 100+ test files |
-| **Docker Support** | Full 6-service stack with health checks and persistent volumes |
+| **Docker Support** | Full stack with health checks, persistent volumes, and TLS |
 | **License** | MIT |
 
 ---

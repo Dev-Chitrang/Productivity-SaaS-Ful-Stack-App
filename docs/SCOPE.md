@@ -25,7 +25,7 @@ A modular, full-stack productivity application that combines task management, no
 **Capabilities:**
 - Email/password registration with 6-digit OTP email verification
 - User login with email and password
-- Google OAuth sign-in with server-side token verification
+- Google Identity Services (GIS) sign-in with server-side token verification
 - Two-factor authentication via login OTP
 - JWT-based session management with access tokens (15-minute expiry) and refresh tokens (7-day expiry)
 - Token refresh with Redis-backed session whitelist for server-side revocation
@@ -33,10 +33,10 @@ A modular, full-stack productivity application that combines task management, no
 - Resend OTP endpoints for both signup and login flows
 - Sliding-window rate limiting on all auth endpoints (3 requests per 60 seconds)
 
-**Versions:** `release/v1` (core auth), `release/v2` (+ Google OAuth, 2FA, rate limiting)
+**Versions:** `release/v1` (core auth), `release/v2` (+ Google Identity Services, 2FA, rate limiting)
 
 **Current Limitations:**
-- Only Google OAuth is supported as an external identity provider
+- Only Google Identity Services is supported as an external identity provider
 - No social login providers beyond Google
 - No account deletion (only soft deactivation via `is_active` flag)
 - No email change without current password verification
@@ -405,7 +405,7 @@ A modular, full-stack productivity application that combines task management, no
 
 ### Performance
 
-- Uvicorn runs with 4 workers in production
+- Uvicorn runs with dynamic workers in production (computed from CPU cores)
 - Async database access via asyncpg connection pool
 - Async Redis connections via aioredis
 - React Query caches API responses with automatic stale detection and background refetching
@@ -424,7 +424,7 @@ A modular, full-stack productivity application that combines task management, no
 - Refresh tokens stored in Redis for server-side revocation
 - Bcrypt password hashing via pwdlib
 - OTP-based two-factor authentication with Redis-stored codes (10-minute TTL)
-- Google OAuth with server-side ID token verification
+- Google Identity Services with server-side ID token verification
 - Sliding-window rate limiting per user (identified by JWT) or per IP (for unauthenticated requests)
 - File upload validation: extension whitelisting, MIME detection via python-magic, 50MB size limit
 - CORS configured to allow all origins
@@ -434,7 +434,7 @@ A modular, full-stack productivity application that combines task management, no
 - Non-root Docker container execution
 - Secrets managed via environment variables, never hardcoded
 
-**Versions:** `release/v1` (core security), `release/v2` (+ Google OAuth, rate limiting, 2FA)
+**Versions:** `release/v1` (core security), `release/v2` (+ Google Identity Services, rate limiting, 2FA)
 
 ---
 
@@ -473,7 +473,7 @@ A modular, full-stack productivity application that combines task management, no
 
 - 6-service Docker Compose stack:
   - **Frontend:** React SPA served by nginx (port 80), reverse-proxies `/api/` and `/ws/` to backend
-  - **Backend:** FastAPI + Uvicorn with 4 workers (port 8000)
+  - **Backend:** FastAPI + Uvicorn with dynamic workers (port 8000)
   - **Celery:** Worker + Beat sharing the backend image
   - **PostgreSQL:** 16-alpine with persistent named volume
   - **Redis:** 7.2-alpine with AOF persistence and named volume
@@ -558,7 +558,7 @@ Development environment configuration:
 
 Production environment configuration:
 - Full Docker Compose stack with all 6 services
-- Backend served by Uvicorn with 4 workers behind nginx
+- Backend served by Uvicorn with dynamic workers behind nginx
 - Frontend served as static build by nginx
 - PostgreSQL with persistent named volume
 - Redis with AOF persistence
@@ -611,7 +611,7 @@ Everything in Scope 1, plus:
 | **Session History** | Redis-backed session engine, per-session recordings/transcripts/analysis |
 | **Attachments** | Generic file uploads with S3/local providers for tasks, events, sessions |
 | **Relations** | Cross-entity linking between meetings, sessions, and tasks |
-| **Security & Rate Limiting** | Per-user API rate limiting, Google OAuth, 2FA |
+| **Security & Rate Limiting** | Per-user API rate limiting, Google Identity Services, 2FA |
 | **External Providers** | Brevo email, AWS S3 storage, environment-based provider switching |
 | **Testing & Docker** | 2100+ tests, Docker Compose with 6 services, health checks |
 | **Push Notifications** | Browser push notifications for scheduled meetings via VAPID |
