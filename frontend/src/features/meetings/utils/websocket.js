@@ -158,6 +158,7 @@ export class SignalingClient {
           participantId: data?.participant_id,
           participantStatus: data?.participant_status,
           guestName: data?.guest_name,
+          userName: data?.user_name,
           userId: data?.user_id,
           type: data?.type,
           isMuted: data?.is_muted,
@@ -169,6 +170,7 @@ export class SignalingClient {
           connectionId: data?.connection_id,
           participantId: data?.participant_id,
           guestName: data?.guest_name,
+          userName: data?.user_name,
           userId: data?.user_id,
           type: data?.type,
         })
@@ -194,6 +196,7 @@ export class SignalingClient {
           connectionId: data?.connection_id,
           participantId: data?.participant_id,
           guestName: data?.guest_name,
+          userName: data?.user_name,
           userId: data?.user_id,
           message: data?.message,
         })

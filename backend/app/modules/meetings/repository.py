@@ -7,6 +7,7 @@ from sqlalchemy import select, and_, func, update, case
 from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation, MeetingAIAnalysis, MeetingSession
 from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, SessionStatus, AIAnalysisStatus
 from app.modules.meetings.constants import MEETING_URL_FORMAT
+from app.core.logger import logger
 
 class MeetingRepository:
     def __init__(self, db: AsyncSession):

@@ -75,7 +75,6 @@ class MeetingService:
         updated_count = await self.repo.bulk_end_participants(
             meeting_id, now, screen_sharer_id=meeting.active_screen_sharer_id,
         )
-        logger.info("[end_meeting] meeting_id=%s bulk_end_participants rows=%d", meeting_id, updated_count)
 
         active_session = await self.session_service.get_active_session(meeting_id)
         if active_session:
@@ -592,7 +591,7 @@ class MeetingService:
         return participant
 
     async def start_screen_share(self, meeting_id: UUID, participant_id: UUID, user_id: Optional[UUID] = None, guest_name: Optional[str] = None) -> Meeting:
-        meeting = await self.get_meeting(meeting_id)
+        meeting = await self.repo.get_by_id(meeting_id)
         if meeting.status != MeetingStatus.ACTIVE:
             raise MeetingValidationError("Meeting is not active.")
         if meeting.active_screen_sharer_id is not None:
@@ -609,7 +608,7 @@ class MeetingService:
         return meeting
 
     async def stop_screen_share(self, meeting_id: UUID, participant_id: UUID) -> Meeting:
-        meeting = await self.get_meeting(meeting_id)
+        meeting = await self.repo.get_by_id(meeting_id)
         if meeting.active_screen_sharer_id != participant_id:
             raise MeetingValidationError("You are not the active screen sharer.")
         meeting = await self.repo.update(meeting, {"active_screen_sharer_id": None})

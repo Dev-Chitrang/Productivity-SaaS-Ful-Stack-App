@@ -26,6 +26,7 @@ async def _safe_cleanup(
     guest_name: Optional[str],
     guest_email: Optional[str],
     service: MeetingService,
+    user_name: Optional[str] = None,
 ):
     if connection_id is None:
         return
@@ -50,6 +51,7 @@ async def _safe_cleanup(
                 "connection_id": connection_id,
                 "user_id": str(user_id) if user_id else None,
                 "guest_name": guest_name,
+                "user_name": user_name,
             }
         })
     except Exception as exc:
@@ -87,6 +89,7 @@ async def meeting_signaling_endpoint(
 
     room_id = str(meeting_id)
     connection_id: Optional[str] = None
+    user_name: Optional[str] = None
 
     logger.info("[meeting_id=%s] connection opened", room_id)
 
@@ -114,12 +117,6 @@ async def meeting_signaling_endpoint(
         if participant.status == ParticipantStatus.ADMITTED:
             await service.reconnect_participant(meeting_id, participant.id)
 
-        # CRITICAL: Commit the DB session here to release the PostgreSQL row-level lock
-        # acquired by join_meeting_flow (status update, participant creation, etc.).
-        # Without this commit, the WebSocket's long-lived session holds the lock on the
-        # `meetings` row for the entire connection duration. Any subsequent HTTP request
-        # that updates the same row (e.g. POST /meetings/{id}/end) will block until the
-        # WebSocket disconnects — causing a 30s Axios timeout on the frontend.
         await service.repo.db.commit()
 
         # Register in connection manager (with participant metadata for logging)
@@ -136,6 +133,10 @@ async def meeting_signaling_endpoint(
             },
         )
 
+        user_name = None
+        if user_id:
+            user_name = await service.repo.get_user_name_by_id(user_id)
+
         logger.info("[meeting_id=%s] [participant_id=%s] participant created", room_id, connection_id)
 
         is_waiting = participant.status == ParticipantStatus.WAITING
@@ -149,6 +150,7 @@ async def meeting_signaling_endpoint(
                     "connection_id": connection_id,
                     "guest_name": guest_name,
                     "user_id": str(user_id) if user_id else None,
+                    "user_name": user_name,
                     "type": participant.participant_type.value,
                 }
             })
@@ -165,6 +167,7 @@ async def meeting_signaling_endpoint(
                     "connection_id": connection_id,
                     "guest_name": guest_name,
                     "user_id": str(user_id) if user_id else None,
+                    "user_name": user_name,
                     "type": participant.participant_type.value,
                     "is_muted": participant.is_muted,
                 }
@@ -179,6 +182,7 @@ async def meeting_signaling_endpoint(
                     "connection_id": connection_id,
                     "guest_name": guest_name,
                     "user_id": str(user_id) if user_id else None,
+                    "user_name": user_name,
                     "type": participant.participant_type.value,
                     "is_muted": participant.is_muted,
                 }
@@ -230,6 +234,7 @@ async def meeting_signaling_endpoint(
                         "connection_id": connection_id,
                         "guest_name": guest_name,
                         "user_id": str(user_id) if user_id else None,
+                        "user_name": user_name,
                     }
                 }, exclude_connection_id=connection_id)
                 logger.info("[meeting_id=%s] [participant_id=%s] participant admitted", room_id, connection_id)
@@ -250,6 +255,8 @@ async def meeting_signaling_endpoint(
                 raw_data = await asyncio.wait_for(websocket.receive_json(), timeout=POLL_INTERVAL)
             except asyncio.TimeoutError:
                 continue
+
+            _event_type = raw_data.get("type") if isinstance(raw_data, dict) else "UNKNOWN"
 
             if not is_admitted:
                 if raw_data.get("type") == "check_admitted":
@@ -272,6 +279,7 @@ async def meeting_signaling_endpoint(
             # Self-mute/unmute via WebSocket
             if event_type == "self_mute":
                 await service.repo.update_participant(current_state, {"is_muted": True})
+                await service.repo.db.commit()
                 last_muted_state = True
                 await ws_connection_manager.broadcast_to_room(room_id, {
                     "event": WSEvent.MUTE_CHANGED,
@@ -284,6 +292,7 @@ async def meeting_signaling_endpoint(
 
             if event_type == "self_unmute":
                 await service.repo.update_participant(current_state, {"is_muted": False})
+                await service.repo.db.commit()
                 last_muted_state = False
                 await ws_connection_manager.broadcast_to_room(room_id, {
                     "event": WSEvent.MUTE_CHANGED,
@@ -311,6 +320,7 @@ async def meeting_signaling_endpoint(
                         "connection_id": connection_id,
                         "guest_name": participant.guest_name,
                         "user_id": str(participant.user_id) if participant.user_id else None,
+                        "user_name": user_name,
                     }
                 })
                 continue
@@ -318,6 +328,7 @@ async def meeting_signaling_endpoint(
             if event_type == "screen_share_started":
                 try:
                     await service.start_screen_share(meeting_id, participant.id, user_id=user_id, guest_name=guest_name)
+                    await service.repo.db.commit()
                 except Exception as e:
                     await ws_connection_manager.send_personal_message({
                         "event": WSEvent.ERROR,
@@ -331,6 +342,7 @@ async def meeting_signaling_endpoint(
                         "connection_id": connection_id,
                         "guest_name": participant.guest_name,
                         "user_id": str(participant.user_id) if participant.user_id else None,
+                        "user_name": user_name,
                     }
                 })
                 continue
@@ -338,6 +350,7 @@ async def meeting_signaling_endpoint(
             if event_type == "screen_share_stopped":
                 try:
                     await service.stop_screen_share(meeting_id, participant.id)
+                    await service.repo.db.commit()
                 except Exception as e:
                     await ws_connection_manager.send_personal_message({
                         "event": WSEvent.ERROR,
@@ -371,15 +384,15 @@ async def meeting_signaling_endpoint(
                 await ws_connection_manager.broadcast_to_room(room_id, signaling_message, exclude_connection_id=connection_id)
 
     except WebSocketDisconnect:
-        await _safe_cleanup(room_id, connection_id, meeting_id, user_id, guest_name, guest_email, service)
+        await _safe_cleanup(room_id, connection_id, meeting_id, user_id, guest_name, guest_email, service, user_name)
         logger.info("[meeting_id=%s] [participant_id=%s] participant disconnected", room_id, connection_id)
 
     except asyncio.CancelledError:
-        await _safe_cleanup(room_id, connection_id, meeting_id, user_id, guest_name, guest_email, service)
+        await _safe_cleanup(room_id, connection_id, meeting_id, user_id, guest_name, guest_email, service, user_name)
         logger.info("[meeting_id=%s] [participant_id=%s] cleanup complete", room_id, connection_id)
 
     except Exception as e:
-        await _safe_cleanup(room_id, connection_id, meeting_id, user_id, guest_name, guest_email, service)
+        await _safe_cleanup(room_id, connection_id, meeting_id, user_id, guest_name, guest_email, service, user_name)
         try:
             await websocket.close(code=4000, reason=str(e))
         except Exception:

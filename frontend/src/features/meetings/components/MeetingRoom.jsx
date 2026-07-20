@@ -173,6 +173,7 @@ export function MeetingRoom({
       id: data.participantId,
       connection_id: data.connectionId,
       guest_name: data.guestName,
+      user_name: data.userName,
       user_id: data.userId,
       participant_type: data.userId ? "REGISTERED" : "GUEST",
       status: data.participantStatus || "WAITING",
@@ -234,6 +235,7 @@ export function MeetingRoom({
         return {
           id: data.participantId,
           guest_name: data.guestName,
+          user_name: data.userName,
           user_id: data.userId,
           status: "ADMITTED",
           participant_type: data.userId ? "REGISTERED" : "GUEST",
@@ -256,6 +258,7 @@ export function MeetingRoom({
         id: data.participantId,
         connection_id: data.connectionId,
         guest_name: data.guestName,
+        user_name: data.userName,
         user_id: data.userId,
         participant_type: data.userId ? "REGISTERED" : "GUEST",
         status: "WAITING",
