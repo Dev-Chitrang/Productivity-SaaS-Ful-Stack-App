@@ -1,9 +1,16 @@
 import { getAccessToken } from "@/lib/tokenStore"
 
 export function getWebSocketUrl(meetingId, guestName, guestEmail) {
-  const apiUrl = import.meta.env.VITE_API_URL || "http://localhost:8000/api/v1"
-  const host = apiUrl.replace(/^https?:\/\//, "").replace("/api/v1", "")
-  const protocol = apiUrl.startsWith("https") ? "wss" : "ws"
+  let protocol, host
+
+  if (import.meta.env.VITE_API_URL) {
+    const apiBase = import.meta.env.VITE_API_URL
+    protocol = apiBase.startsWith("https") ? "wss" : "ws"
+    host = apiBase.replace(/^https?:\/\//, "").replace(/\/?api\/v1\/?$/, "")
+  } else {
+    protocol = window.location.protocol === "https:" ? "wss" : "ws"
+    host = window.location.host
+  }
   const params = new URLSearchParams()
   const token = getAccessToken()
   if (token) {
