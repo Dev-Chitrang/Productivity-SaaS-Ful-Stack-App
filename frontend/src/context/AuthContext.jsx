@@ -14,11 +14,6 @@ export function AuthProvider({ children }) {
   const isAuthenticated = !!user
 
   const fetchUser = useCallback(async () => {
-    const token = getAccessToken()
-    if (!token) {
-      setIsLoading(false)
-      return
-    }
     try {
       const { data } = await userApi.getProfile()
 

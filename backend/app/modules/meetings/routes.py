@@ -1,5 +1,6 @@
 from typing import List, Optional
 from uuid import UUID
+import asyncio
 from fastapi import APIRouter, Depends, Query, status, UploadFile, File, Form, HTTPException, Body
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -7,6 +8,7 @@ from app.core.rate_limit import RateLimiter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.logger import logger
 
 from app.core.websocket_manager import ws_connection_manager
 from app.modules.meetings.dependencies import get_current_user_id, get_optional_user_id, get_meetings_service, get_attachment_service
@@ -56,7 +58,7 @@ async def get_ai_analysis_service(db: AsyncSession = Depends(get_db)) -> Meeting
     # by MeetingCompletionService via the Celery completion pipeline.
     return MeetingAIAnalysisService(repo, provider)
 
-@router.post("/", status_code=status.HTTP_201_CREATED, response_model=MeetingResponse, dependencies=[Depends(RateLimiter(10, 60, "meeting_creation"))])
+@router.post("", status_code=status.HTTP_201_CREATED, response_model=MeetingResponse, dependencies=[Depends(RateLimiter(10, 60, "meeting_creation"))])
 async def create_meeting_endpoint(
     payload: MeetingCreate,
     current_user_id: UUID = Depends(get_current_user_id),
@@ -116,11 +118,17 @@ async def end_meeting_endpoint(
 ):
     ctrl = MeetingController(service)
     result = await ctrl.end_meeting(current_user_id, meeting_id)
-    room_id = str(meeting_id)
-    await ws_connection_manager.broadcast_to_room(room_id, {
-        "event": WSEvent.MEETING_ENDED,
-        "data": {"meeting_id": str(meeting_id)}
-    })
+
+    async def _broadcast_meeting_ended(room_id: str, mid: str) -> None:
+        try:
+            await ws_connection_manager.broadcast_to_room(room_id, {
+                "event": WSEvent.MEETING_ENDED,
+                "data": {"meeting_id": mid}
+            })
+        except Exception as exc:
+            logger.error("[end_meeting] broadcast failed room=%s: %s", room_id, exc)
+
+    asyncio.create_task(_broadcast_meeting_ended(str(meeting_id), str(meeting_id)))
     return result
 
 @router.post("/{meeting_id}/cancel", status_code=status.HTTP_200_OK, response_model=MeetingResponse)
@@ -357,7 +365,7 @@ class LeaveMeetingPayload(BaseModel):
     guest_name: Optional[str] = None
     guest_email: Optional[str] = None
 
-@router.post("/{meeting_id}/leave", status_code=status.HTTP_200_OK, response_model=MeetingParticipantResponse)
+@router.post("/{meeting_id}/leave", status_code=status.HTTP_200_OK)
 async def leave_meeting_endpoint(
     meeting_id: UUID,
     payload: LeaveMeetingPayload = Body(default=None),

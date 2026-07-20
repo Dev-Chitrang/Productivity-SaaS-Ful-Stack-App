@@ -64,6 +64,7 @@ class TestParticipantStatus:
         assert ParticipantStatus.LEFT == "LEFT"
         assert ParticipantStatus.REMOVED == "REMOVED"
         assert ParticipantStatus.REJECTED == "REJECTED"
+        assert ParticipantStatus.DISCONNECTED == "DISCONNECTED"
 
     def test_is_str_enum(self):
         assert issubclass(ParticipantStatus, str)
@@ -75,6 +76,7 @@ class TestParticipantStatus:
             "LEFT",
             "REMOVED",
             "REJECTED",
+            "DISCONNECTED",
         }
 
 

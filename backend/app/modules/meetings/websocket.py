@@ -36,22 +36,25 @@ async def _safe_cleanup(
         logger.error("[meeting_id=%s] [participant_id=%s] cleanup failed: disconnect - %s", room_id, connection_id, exc)
 
     try:
-        await service.leave_meeting_flow(meeting_id, user_id=user_id, guest_email=guest_email)
+        participant = await service.disconnect_participant_flow(
+            meeting_id, user_id=user_id, guest_email=guest_email
+        )
     except Exception as exc:
-        logger.error("[meeting_id=%s] [participant_id=%s] cleanup failed: leave_meeting_flow - %s", room_id, connection_id, exc)
+        logger.error("[meeting_id=%s] [participant_id=%s] cleanup failed: disconnect_participant_flow - %s", room_id, connection_id, exc)
+        participant = None
 
     try:
         await ws_connection_manager.broadcast_to_room(room_id, {
-            "event": WSEvent.PARTICIPANT_LEFT,
+            "event": WSEvent.PARTICIPANT_DISCONNECTED,
             "data": {
                 "connection_id": connection_id,
-                "user_id": str(user_id) if user_id else None
+                "user_id": str(user_id) if user_id else None,
+                "guest_name": guest_name,
             }
         })
     except Exception as exc:
         logger.error("[meeting_id=%s] [participant_id=%s] cleanup failed: broadcast_to_room - %s", room_id, connection_id, exc)
 
-    # Broadcast host_left if the disconnected user is the host
     if user_id:
         try:
             meeting = await service.get_meeting(meeting_id)
@@ -63,6 +66,7 @@ async def _safe_cleanup(
                         "host_id": str(user_id),
                         "host_name": host_name,
                         "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "is_temporary": True,
                     }
                 })
         except Exception as exc:
@@ -105,6 +109,18 @@ async def meeting_signaling_endpoint(
         connection_id = str(participant.id)
 
         logger.info("[meeting_id=%s] [participant_id=%s] connection authenticated", room_id, connection_id)
+
+        # If this is a reconnecting DISCONNECTED participant, cancel the pending force-leave
+        if participant.status == ParticipantStatus.ADMITTED:
+            await service.reconnect_participant(meeting_id, participant.id)
+
+        # CRITICAL: Commit the DB session here to release the PostgreSQL row-level lock
+        # acquired by join_meeting_flow (status update, participant creation, etc.).
+        # Without this commit, the WebSocket's long-lived session holds the lock on the
+        # `meetings` row for the entire connection duration. Any subsequent HTTP request
+        # that updates the same row (e.g. POST /meetings/{id}/end) will block until the
+        # WebSocket disconnects — causing a 30s Axios timeout on the frontend.
+        await service.repo.db.commit()
 
         # Register in connection manager (with participant metadata for logging)
         meeting = await service.get_meeting(meeting_id)
@@ -153,6 +169,20 @@ async def meeting_signaling_endpoint(
                     "is_muted": participant.is_muted,
                 }
             }, exclude_connection_id=connection_id)
+
+            # Send self-info so the (re)connecting participant can set myParticipant
+            await ws_connection_manager.send_personal_message({
+                "event": WSEvent.PARTICIPANT_JOINED,
+                "data": {
+                    "participant_id": str(participant.id),
+                    "participant_status": participant.status.value,
+                    "connection_id": connection_id,
+                    "guest_name": guest_name,
+                    "user_id": str(user_id) if user_id else None,
+                    "type": participant.participant_type.value,
+                    "is_muted": participant.is_muted,
+                }
+            }, websocket)
 
         last_muted_state = participant.is_muted
 

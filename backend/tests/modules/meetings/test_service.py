@@ -263,8 +263,8 @@ class TestMeetingService:
 
     async def test_leave_meeting_no_active_session(self, service, repo):
         service.session_service.get_active_session.return_value = None
-        with pytest.raises(MeetingValidationError, match="No active session"):
-            await service.leave_meeting(uuid.UUID("12345678-1234-5678-1234-567812345678"), user_id=uuid.uuid4())
+        result = await service.leave_meeting(uuid.UUID("12345678-1234-5678-1234-567812345678"), user_id=uuid.uuid4())
+        assert result is None
 
     async def test_get_waiting_count(self, service, repo):
         meeting = self._make_meeting()

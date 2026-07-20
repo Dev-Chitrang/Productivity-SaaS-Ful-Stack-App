@@ -2,13 +2,18 @@ MAX_MEETING_TITLE_LENGTH = 255
 MAX_GUEST_NAME_LENGTH = 100
 MAX_GUEST_EMAIL_LENGTH = 255
 
-# Base format matching workspace workspace.app/m/{meeting_code}
+# Base format matching workspace workspace.app/m/{code}
 MEETING_URL_FORMAT = "https://workspace.app/m/{code}"
+
+# Grace period (seconds) before a disconnected participant is marked LEFT
+DISCONNECT_GRACE_PERIOD = 30
+
 
 class WSEvent:
     PARTICIPANT_JOINED = "participant_joined"
     PARTICIPANT_WAITING = "participant_waiting"
     PARTICIPANT_LEFT = "participant_left"
+    PARTICIPANT_DISCONNECTED = "participant_disconnected"
     PARTICIPANT_ADMITTED = "participant_admitted"
     PARTICIPANT_REMOVED = "participant_removed"
     PARTICIPANT_REJECTED = "participant_rejected"

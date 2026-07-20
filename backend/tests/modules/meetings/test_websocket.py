@@ -61,6 +61,8 @@ def _make_service(participant=None, meeting=None, meeting_status=MeetingStatus.A
     svc.join_meeting_flow = AsyncMock(return_value=participant or _make_participant())
     svc.get_meeting = AsyncMock(return_value=meeting or _make_meeting())
     svc.leave_meeting_flow = AsyncMock(return_value=None)
+    svc.disconnect_participant_flow = AsyncMock(return_value=None)
+    svc.reconnect_participant = AsyncMock(return_value=None)
     svc.request_screen_share = AsyncMock(return_value=participant or _make_participant())
     svc.start_screen_share = AsyncMock()
     svc.stop_screen_share = AsyncMock()
@@ -69,7 +71,10 @@ def _make_service(participant=None, meeting=None, meeting_status=MeetingStatus.A
     svc.repo.get_meeting_status = AsyncMock(return_value=meeting_status)
     svc.repo.update_participant = AsyncMock()
     svc.repo.get_user_name_by_id = AsyncMock(return_value="Host Name")
+    svc.repo.db = MagicMock()
+    svc.repo.db.commit = AsyncMock()  # needed for the post-join commit in websocket.py
     return svc
+
 
 
 
@@ -111,7 +116,7 @@ class TestSafeCleanup:
         svc.get_meeting = AsyncMock(return_value=meeting)
         with patch("app.modules.meetings.websocket.ws_connection_manager", ws_mgr):
             await _safe_cleanup("room1", "conn1", meeting_id, None, None, "guest@x.com", svc)
-        svc.leave_meeting_flow.assert_called_once_with(
+        svc.disconnect_participant_flow.assert_called_once_with(
             meeting_id, user_id=None, guest_email="guest@x.com"
         )
 
@@ -130,7 +135,7 @@ class TestSafeCleanup:
             call[0][1]["event"]
             for call in ws_mgr.broadcast_to_room.call_args_list
         ]
-        assert WSEvent.PARTICIPANT_LEFT in broadcast_events
+        assert WSEvent.PARTICIPANT_DISCONNECTED in broadcast_events
 
     async def test_broadcasts_host_left_when_host_disconnects(self):
         from app.modules.meetings.websocket import _safe_cleanup
@@ -183,7 +188,7 @@ class TestSafeCleanup:
     async def test_leave_meeting_exception_does_not_crash_cleanup(self):
         from app.modules.meetings.websocket import _safe_cleanup
         svc = _make_service()
-        svc.leave_meeting_flow = AsyncMock(side_effect=Exception("db gone"))
+        svc.disconnect_participant_flow = AsyncMock(side_effect=Exception("db gone"))
         meeting_id = uuid.uuid4()
         meeting = _make_meeting()
         svc.get_meeting = AsyncMock(return_value=meeting)
@@ -671,7 +676,7 @@ class TestWebSocketDisconnectCleanup:
             mgr.active_rooms = {}
             await meeting_signaling_endpoint(websocket=ws, meeting_id=uuid.uuid4(), service=svc)
 
-        svc.leave_meeting_flow.assert_called_once()
+        svc.disconnect_participant_flow.assert_called_once()
         mgr.disconnect.assert_called_once()
 
     async def test_cancelled_error_triggers_cleanup(self):
@@ -693,4 +698,4 @@ class TestWebSocketDisconnectCleanup:
             mgr.active_rooms = {}
             await meeting_signaling_endpoint(websocket=ws, meeting_id=uuid.uuid4(), service=svc)
 
-        svc.leave_meeting_flow.assert_called_once()
+        svc.disconnect_participant_flow.assert_called_once()

@@ -38,10 +38,14 @@ function MeetingRoomPage() {
     }
   }, [guestName, guestEmail, id, location.state?.participantId])
 
-  const handleLeave = () => {
+  const meetingEndedByHostRef = useRef(false)
+
+  const handleLeave = (skipApi = false) => {
     clearGuestSession()
-    const payload = guestEmail ? { guest_email: guestEmail } : {}
-    leaveMeeting.mutate({ id, ...payload })
+    if (!skipApi) {
+      const payload = guestEmail ? { guest_email: guestEmail } : {}
+      leaveMeeting.mutate({ id, ...payload })
+    }
     navigate(`/meetings/${id}`, { replace: true })
   }
 
@@ -51,10 +55,15 @@ function MeetingRoomPage() {
     }
   }, [authLoading, isAuthenticated, guestName, navigate])
 
-  const handleEndMeeting = () => {
-    endMeeting.mutate(id)
-    clearGuestSession()
-    navigate(`/meetings/${id}`, { replace: true })
+  const handleEndMeeting = async () => {
+    meetingEndedByHostRef.current = true
+    try {
+      await endMeeting.mutateAsync(id)
+      clearGuestSession()
+      navigate(`/meetings/${id}`, { replace: true })
+    } catch {
+      meetingEndedByHostRef.current = false
+    }
   }
 
   if (isLoading) {
@@ -110,6 +119,7 @@ function MeetingRoomPage() {
         onLeave={handleLeave}
         onEndMeeting={handleEndMeeting}
         endMeetingPending={endMeeting.isPending}
+        onNavigateOnEnded={() => handleLeave(true)}
       />
     </div>
   )

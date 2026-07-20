@@ -159,7 +159,7 @@ export class RTCMeshManager {
       })
     } catch (err) {
       if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-        throw new Error("Screen share permission denied.")
+        throw new Error("Screen share cancelled.")
       }
       if (err.name === "NotFoundError") {
         throw new Error("No screen source found.")

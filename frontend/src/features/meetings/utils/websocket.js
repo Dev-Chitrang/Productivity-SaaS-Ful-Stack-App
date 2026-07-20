@@ -174,6 +174,14 @@ export class SignalingClient {
         })
         break
 
+      case "participant_disconnected":
+        this._emit("participant_disconnected", {
+          connectionId: data?.connection_id,
+          userId: data?.user_id,
+          guestName: data?.guest_name,
+        })
+        break
+
       case "participant_admitted":
         this._emit("participant_admitted", {
           connectionId: data?.connection_id,
@@ -215,6 +223,7 @@ export class SignalingClient {
           hostId: data?.host_id,
           hostName: data?.host_name,
           timestamp: data?.timestamp,
+          isTemporary: data?.is_temporary || false,
         })
         break
 

@@ -100,6 +100,7 @@ export function useEndMeeting() {
       toast.success("Meeting ended.")
     },
     onError: (err) => {
+      console.error("[useEndMeeting] failed:", err)
       const detail = err?.response?.data?.detail
       toast.error(detail || "Failed to end meeting.")
     },

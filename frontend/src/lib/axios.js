@@ -5,9 +5,13 @@ const API_BASE_URL = import.meta.env.VITE_API_URL
     ? `${import.meta.env.VITE_API_URL}/api/v1`
     : '/api/v1'
 
+const REFRESH_TIMEOUT_MS = 10000
+const QUEUE_TIMEOUT_MS = 15000
+
 const api = axios.create({
     baseURL: API_BASE_URL,
-    withCredentials: true
+    withCredentials: true,
+    timeout: 30000,
 })
 
 let isRefreshing = false
@@ -47,7 +51,16 @@ api.interceptors.response.use(
 
         if (isRefreshing) {
             return new Promise((resolve, reject) => {
-                failedQueue.push({ resolve, reject })
+                const entry = { resolve, reject }
+                failedQueue.push(entry)
+
+                setTimeout(() => {
+                    const idx = failedQueue.indexOf(entry)
+                    if (idx !== -1) {
+                        failedQueue.splice(idx, 1)
+                        reject(new Error('Token refresh timed out'))
+                    }
+                }, QUEUE_TIMEOUT_MS)
             }).then((token) => {
                 originalRequest.headers.Authorization = `Bearer ${token}`
                 return api(originalRequest)
@@ -61,7 +74,7 @@ api.interceptors.response.use(
             const { data } = await axios.post(
                 `${API_BASE_URL}/auth/refresh`,
                 {},
-                { withCredentials: true }
+                { withCredentials: true, timeout: REFRESH_TIMEOUT_MS }
             )
             setAccessToken(data.access_token)
             processQueue(null, data.access_token)
@@ -70,7 +83,9 @@ api.interceptors.response.use(
         } catch (refreshError) {
             processQueue(refreshError, null)
             clearAccessToken()
-            window.location.href = '/auth'
+            if (!window.location.pathname.startsWith('/auth')) {
+                window.location.href = '/auth'
+            }
             return Promise.reject(refreshError)
         } finally {
             isRefreshing = false

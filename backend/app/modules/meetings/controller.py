@@ -115,6 +115,9 @@ class MeetingController:
     async def leave_meeting(self, meeting_id: UUID, user_id: Optional[UUID], guest_email: Optional[str] = None) -> dict:
         try:
             participant = await self.service.leave_meeting(meeting_id, user_id=user_id, guest_email=guest_email)
+            if participant is None:
+                # Meeting already ended (no active session) — return a no-op response
+                return {"status": "left", "detail": "Meeting already ended."}
             return MeetingParticipantResponse.model_validate(participant)
         except MeetingValidationError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

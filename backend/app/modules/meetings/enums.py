@@ -19,6 +19,7 @@ class ParticipantType(str, Enum):
 class ParticipantStatus(str, Enum):
     WAITING = "WAITING"
     ADMITTED = "ADMITTED"
+    DISCONNECTED = "DISCONNECTED"
     LEFT = "LEFT"
     REMOVED = "REMOVED"
     REJECTED = "REJECTED"

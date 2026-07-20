@@ -38,6 +38,7 @@ export function MeetingRoom({
   onLeave,
   onEndMeeting,
   endMeetingPending,
+  onNavigateOnEnded,
 }) {
   const uploadRecording = useUploadRecording()
   const uploadTranscript = useUploadTranscript()
@@ -81,6 +82,7 @@ export function MeetingRoom({
   const recordingRef = useRef(null)
   const transcriptRef = useRef(null)
   const destroyedRef = useRef(false)
+  const meetingEndedRef = useRef(false)
   const connMapRef = useRef({})
   const remoteAudioElsRef = useRef({})
 
@@ -88,13 +90,15 @@ export function MeetingRoom({
   const currentUserIdRef = useRef(currentUserId)
   const guestNameRef = useRef(guestName)
   const onLeaveRef = useRef(onLeave)
+  const onNavigateOnEndedRef = useRef(onNavigateOnEnded)
 
   useEffect(() => {
     isHostRef.current = isHost
     currentUserIdRef.current = currentUserId
     guestNameRef.current = guestName
     onLeaveRef.current = onLeave
-  }, [isHost, currentUserId, guestName, onLeave])
+    onNavigateOnEndedRef.current = onNavigateOnEnded
+  }, [isHost, currentUserId, guestName, onLeave, onNavigateOnEnded])
 
   const cleanupAll = useCallback(() => {
     if (recordingRef.current) {
@@ -161,6 +165,10 @@ export function MeetingRoom({
 
   const handleParticipantJoined = useCallback((data) => {
     if (destroyedRef.current) return
+    const isMe = guestNameRef.current
+      ? data.guestName === guestNameRef.current
+      : data.userId === currentUserIdRef.current
+
     const newParticipant = {
       id: data.participantId,
       connection_id: data.connectionId,
@@ -169,13 +177,27 @@ export function MeetingRoom({
       participant_type: data.userId ? "REGISTERED" : "GUEST",
       status: data.participantStatus || "WAITING",
       is_muted: data.isMuted || false,
+      is_reconnecting: false,
     }
 
     connMapRef.current[data.connectionId] = data.participantId
 
+    if (isMe) {
+      setMyParticipant((prev) => {
+        if (prev && prev.id === newParticipant.id) {
+          return { ...prev, ...newParticipant }
+        }
+        return newParticipant
+      })
+    }
+
     setParticipants((prev) => {
-      const exists = prev.some((p) => p.id === newParticipant.id)
-      if (exists) return prev
+      const idx = prev.findIndex((p) => p.id === newParticipant.id)
+      if (idx >= 0) {
+        const updated = [...prev]
+        updated[idx] = { ...updated[idx], ...newParticipant }
+        return updated
+      }
       return [...prev, newParticipant]
     })
   }, [])
@@ -188,6 +210,17 @@ export function MeetingRoom({
     if (rtcRef.current) {
       rtcRef.current.removePeer(data.connectionId)
     }
+  }, [])
+
+  const handleParticipantDisconnected = useCallback((data) => {
+    if (destroyedRef.current) return
+    setParticipants((prev) =>
+      prev.map((p) =>
+        p.connection_id === data.connectionId
+          ? { ...p, is_reconnecting: true }
+          : p
+      )
+    )
   }, [])
 
   const handleParticipantAdmitted = useCallback((data) => {
@@ -242,14 +275,20 @@ export function MeetingRoom({
 
   const handleHostLeft = useCallback((data) => {
     if (destroyedRef.current) return
-    toast.success(`${data?.hostName || "Host"} has left the meeting.`)
+    if (data?.isTemporary) {
+      toast(`${data?.hostName || "Host"} is reconnecting...`, { icon: "\u23f3" })
+    } else {
+      toast.success(`${data?.hostName || "Host"} has left the meeting.`)
+    }
   }, [])
 
   const handleMeetingEnded = useCallback(() => {
-    if (destroyedRef.current) return
-    toast.error("The meeting has ended.")
+    if (destroyedRef.current || meetingEndedRef.current) return
+    meetingEndedRef.current = true
     cleanupAll()
-    onLeaveRef.current()
+    if (onNavigateOnEndedRef.current) {
+      onNavigateOnEndedRef.current()
+    }
   }, [cleanupAll])
 
   const handleParticipantRejected = useCallback(() => {
@@ -352,7 +391,7 @@ export function MeetingRoom({
         const senders = pc.getSenders()
         for (const sender of senders) {
           if (sender.track && sender.track.kind === "video") {
-            try { pc.removeTrack(sender) } catch (e) {}
+            try { pc.removeTrack(sender) } catch (e) { }
           }
         }
         try {
@@ -438,7 +477,7 @@ export function MeetingRoom({
           el.style.display = "none"
         }
         document.body.appendChild(el)
-        el.play().catch(() => {})
+        el.play().catch(() => { })
         if (hasVideo) {
           remoteVideoElsRef.current[connectionId] = el
         } else {
@@ -529,6 +568,7 @@ export function MeetingRoom({
     signal.on("participant_joined", handleParticipantJoined)
     signal.on("participant_waiting", handleParticipantWaiting)
     signal.on("participant_left", handleParticipantLeft)
+    signal.on("participant_disconnected", handleParticipantDisconnected)
     signal.on("participant_admitted", handleParticipantAdmitted)
     signal.on("participant_removed", handleParticipantRemoved)
     signal.on("participant_rejected", handleParticipantRejected)
@@ -849,7 +889,6 @@ export function MeetingRoom({
                       if (rtcRef.current) {
                         await rtcRef.current.stopScreenShare()
                       }
-                      signalingRef.current?.send("screen_share_stopped", null, null)
                     }}
                   >
                     <Stop className="size-4" />
@@ -887,7 +926,6 @@ export function MeetingRoom({
                       if (rtcRef.current) {
                         await rtcRef.current.stopScreenShare()
                       }
-                      signalingRef.current?.send("screen_share_stopped", null, null)
                     }}
                   >
                     <Stop className="size-4" />

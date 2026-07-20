@@ -1,4 +1,5 @@
 from __future__ import annotations
+import asyncio
 from datetime import datetime, timezone, timedelta
 import jwt
 from typing import Optional, Sequence, List
@@ -12,6 +13,7 @@ from app.modules.meetings.ai_provider_service import AIProviderService
 from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation, MeetingSession, AIAnalysisStatus, MeetingAIAnalysis
 from app.modules.meetings.schemas import MeetingCreate, MeetingUpdate, ScheduledMeetingCreate, ScheduledMeetingUpdate, InvitationCreate, InvitationResponse
 from app.modules.meetings.enums import MeetingStatus, MeetingType, ParticipantType, ParticipantStatus, SessionStatus, AIAnalysisStatus
+from app.modules.meetings.constants import DISCONNECT_GRACE_PERIOD, WSEvent
 from app.modules.meetings.exceptions import (
     MeetingNotFoundException,
     MeetingAccessDeniedException,
@@ -23,6 +25,10 @@ from app.core.logger import logger
 from app.workers.tasks import send_async_email
 from redis.asyncio import Redis
 from app.modules.entity_links.repository import EntityLinkRepository
+
+# In-memory tracking of pending disconnect-to-LEFT transitions.
+# Key: "{meeting_id}:{participant_id}", Value: asyncio.Task
+_pending_disconnects: dict[str, asyncio.Task] = {}
 
 class MeetingService:
     def __init__(self, repo: MeetingRepository, storage: StorageService, session_service: MeetingSessionService, auth_service=None):
@@ -66,13 +72,10 @@ class MeetingService:
             raise MeetingValidationError("Only active or idle meetings can be ended.")
 
         now = datetime.now(timezone.utc)
-        participants = await self.repo.get_participants_list(meeting_id, active_only=False)
-        for p in participants:
-            if p.status not in (ParticipantStatus.LEFT, ParticipantStatus.REMOVED, ParticipantStatus.REJECTED):
-                update = {"status": ParticipantStatus.LEFT, "left_at": now}
-                if meeting.active_screen_sharer_id == p.id:
-                    update["can_start_screen_share"] = False
-                await self.repo.update_participant(p, update)
+        updated_count = await self.repo.bulk_end_participants(
+            meeting_id, now, screen_sharer_id=meeting.active_screen_sharer_id,
+        )
+        logger.info("[end_meeting] meeting_id=%s bulk_end_participants rows=%d", meeting_id, updated_count)
 
         active_session = await self.session_service.get_active_session(meeting_id)
         if active_session:
@@ -142,6 +145,87 @@ class MeetingService:
                 "left_at": datetime.now(timezone.utc)
             })
             await self._transition_to_idle_if_empty(meeting_id)
+
+    # ------------------------------------------------------------------
+    # Disconnect / Reconnect (grace period)
+    # ------------------------------------------------------------------
+
+    async def disconnect_participant_flow(
+        self,
+        meeting_id: UUID,
+        user_id: Optional[UUID] = None,
+        guest_email: Optional[str] = None,
+    ) -> Optional[MeetingParticipant]:
+        """Mark a WebSocket-disconnected participant as DISCONNECTED instead of LEFT.
+
+        A background timer transitions them to LEFT after DISCONNECT_GRACE_PERIOD
+        seconds.  If they reconnect before the timer fires, the transition is
+        cancelled and they are restored to ADMITTED.
+        """
+        session = await self.session_service.get_active_session(meeting_id)
+        if not session:
+            return None
+
+        participant = await self.repo.get_active_participant(
+            session.id, user_id=user_id, guest_email=guest_email
+        )
+        if not participant:
+            return None
+        if participant.status == ParticipantStatus.DISCONNECTED:
+            return participant
+
+        await self.repo.update_participant(
+            participant, {"status": ParticipantStatus.DISCONNECTED}
+        )
+
+        key = f"{meeting_id}:{participant.id}"
+        old_task = _pending_disconnects.pop(key, None)
+        if old_task and not old_task.done():
+            old_task.cancel()
+
+        task = asyncio.create_task(
+            _force_disconnect_after_delay(meeting_id, participant.id, DISCONNECT_GRACE_PERIOD)
+        )
+        _pending_disconnects[key] = task
+
+        logger.info(
+            "[meeting_id=%s] [participant_id=%s] marked DISCONNECTED (grace=%ss)",
+            meeting_id, participant.id, DISCONNECT_GRACE_PERIOD,
+        )
+        return participant
+
+    async def reconnect_participant(
+        self,
+        meeting_id: UUID,
+        participant_id: UUID,
+    ) -> None:
+        """Cancel a pending disconnect transition for a reconnecting participant."""
+        key = f"{meeting_id}:{participant_id}"
+        task = _pending_disconnects.pop(key, None)
+        if task and not task.done():
+            task.cancel()
+            logger.info(
+                "[meeting_id=%s] [participant_id=%s] reconnect accepted, pending disconnect cancelled",
+                meeting_id, participant_id,
+            )
+
+    async def cleanup_stale_disconnected(self, meeting_id: UUID, session_id: UUID) -> None:
+        """Transition DISCONNECTED participants with no pending background timer to LEFT.
+
+        Safety-net for cases where the background timer was lost (e.g. server
+        restart).  Called lazily from join_meeting_flow.
+        """
+        participants = await self.repo.get_participants_by_session(session_id, active_only=False)
+        for p in participants:
+            if p.status != ParticipantStatus.DISCONNECTED:
+                continue
+            key = f"{meeting_id}:{p.id}"
+            if key in _pending_disconnects:
+                continue
+            await self.repo.update_participant(p, {
+                "status": ParticipantStatus.LEFT,
+                "left_at": datetime.now(timezone.utc),
+            })
 
     async def list_participants(self, meeting_id: UUID, user_id: Optional[UUID] = None) -> Sequence[MeetingParticipant]:
         meeting = await self.get_meeting(meeting_id)
@@ -324,6 +408,10 @@ class MeetingService:
             if not active_session:
                 active_session = await self.session_service.create_session(meeting.id, meeting.host_id)
 
+        # Safety-net: transition any stale DISCONNECTED participants to LEFT
+        if active_session:
+            await self.cleanup_stale_disconnected(meeting.id, active_session.id)
+
         initial_status = ParticipantStatus.ADMITTED if is_host else ParticipantStatus.WAITING
 
         if user_id:
@@ -332,6 +420,10 @@ class MeetingService:
             if existing:
                 if existing.status == ParticipantStatus.REMOVED:
                     raise MeetingAccessDeniedException(meeting_id, user_id)
+                # Restore a DISCONNECTED participant to ADMITTED on reconnect
+                if existing.status == ParticipantStatus.DISCONNECTED:
+                    await self.repo.update_participant(existing, {"status": ParticipantStatus.ADMITTED})
+                    existing.status = ParticipantStatus.ADMITTED
                 if is_host and not existing.can_start_screen_share:
                     await self.repo.update_participant(existing, {"can_start_screen_share": True})
                 return existing
@@ -355,6 +447,10 @@ class MeetingService:
             if existing:
                 if existing.status == ParticipantStatus.REMOVED:
                     raise MeetingValidationError("You have been removed from this meeting room container.")
+                # Restore a DISCONNECTED participant to ADMITTED on reconnect
+                if existing.status == ParticipantStatus.DISCONNECTED:
+                    await self.repo.update_participant(existing, {"status": ParticipantStatus.ADMITTED})
+                    existing.status = ParticipantStatus.ADMITTED
                 if guest_name:
                     await self.repo.update_participant(existing, {"guest_name": guest_name.strip()})
                 return existing
@@ -433,10 +529,12 @@ class MeetingService:
             if meeting and meeting.status != MeetingStatus.IDLE:
                 await self.repo.update(meeting, {"status": MeetingStatus.IDLE})
 
-    async def leave_meeting(self, meeting_id: UUID, user_id: Optional[UUID] = None, guest_email: Optional[str] = None) -> MeetingParticipant:
+    async def leave_meeting(self, meeting_id: UUID, user_id: Optional[UUID] = None, guest_email: Optional[str] = None) -> Optional[MeetingParticipant]:
         session = await self.session_service.get_active_session(meeting_id)
         if not session:
-            raise MeetingValidationError("No active session found for this meeting.")
+            # Meeting has already ended (e.g. host ended it). No active session to leave.
+            logger.info("[leave_meeting] meeting_id=%s no active session found (meeting already ended)", meeting_id)
+            return None
         participant = await self.repo.get_active_participant(session.id, user_id=user_id, guest_email=guest_email)
         if not participant:
             last = await self.repo.get_last_participant(session.id, user_id=user_id, guest_email=guest_email)
@@ -851,3 +949,58 @@ class MeetingSessionService:
     async def _clear_redis_state(self, meeting_id: UUID) -> None:
         key = f"meeting:{meeting_id}"
         await self.redis.delete(key)
+
+
+# ------------------------------------------------------------------
+# Module-level background task for forced disconnect after grace period
+# ------------------------------------------------------------------
+
+async def _force_disconnect_after_delay(
+    meeting_id: UUID,
+    participant_id: UUID,
+    delay: int,
+) -> None:
+    """After *delay* seconds, transition a DISCONNECTED participant to LEFT.
+
+    Runs as a standalone ``asyncio.Task`` so it is not tied to any
+    request-scoped service or DB session.
+    """
+    await asyncio.sleep(delay)
+
+    key = f"{meeting_id}:{participant_id}"
+    _pending_disconnects.pop(key, None)
+
+    from app.core.database import AsyncSessionLocal
+
+    try:
+        async with AsyncSessionLocal() as session:
+            repo = MeetingRepository(session)
+            participant = await repo.get_participant_by_id(participant_id)
+            if not participant or participant.status != ParticipantStatus.DISCONNECTED:
+                return
+
+            await repo.update_participant(participant, {
+                "status": ParticipantStatus.LEFT,
+                "left_at": datetime.now(timezone.utc),
+            })
+            await session.commit()
+
+            logger.info(
+                "[meeting_id=%s] [participant_id=%s] grace period expired, marked LEFT",
+                meeting_id, participant_id,
+            )
+
+        # Broadcast participant_left to remaining room members
+        from app.core.websocket_manager import ws_connection_manager
+        await ws_connection_manager.broadcast_to_room(str(meeting_id), {
+            "event": WSEvent.PARTICIPANT_LEFT,
+            "data": {
+                "connection_id": str(participant_id),
+                "user_id": str(participant.user_id) if participant.user_id else None,
+            },
+        })
+    except Exception as exc:
+        logger.error(
+            "[meeting_id=%s] [participant_id=%s] _force_disconnect_after_delay failed: %s",
+            meeting_id, participant_id, exc,
+        )

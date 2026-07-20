@@ -141,6 +141,11 @@ function ParticipantRow({
               Waiting
             </span>
           )}
+          {p.is_reconnecting && (
+            <span className="inline-flex items-center rounded px-1 py-0.5 text-[10px] bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+              Reconnecting...
+            </span>
+          )}
           {p.is_muted && !isWaiting && (
             <MicrophoneSlash className="size-3 text-destructive" weight="fill" />
           )}

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional, Sequence
 from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, update
+from sqlalchemy import select, and_, func, update, case
 from app.models.meetings import Meeting, MeetingParticipant, MeetingRecording, MeetingTranscript, MeetingInvitation, MeetingAIAnalysis, MeetingSession
 from app.modules.meetings.enums import MeetingStatus, ParticipantType, ParticipantStatus, SessionStatus, AIAnalysisStatus
 from app.modules.meetings.constants import MEETING_URL_FORMAT
@@ -231,6 +231,38 @@ class MeetingRepository:
         except Exception:
             await self.db.rollback()
             raise
+
+    async def bulk_end_participants(
+        self,
+        meeting_id: UUID,
+        now: datetime,
+        screen_sharer_id: Optional[UUID] = None,
+    ) -> int:
+        values = {
+            "status": ParticipantStatus.LEFT,
+            "left_at": now,
+        }
+        if screen_sharer_id is not None:
+            values["can_start_screen_share"] = case(
+                (MeetingParticipant.id == screen_sharer_id, False),
+                else_=MeetingParticipant.can_start_screen_share,
+            )
+        stmt = (
+            update(MeetingParticipant)
+            .where(
+                MeetingParticipant.session_id == MeetingSession.id,
+                MeetingSession.meeting_id == meeting_id,
+                MeetingParticipant.status.notin_([
+                    ParticipantStatus.LEFT,
+                    ParticipantStatus.REMOVED,
+                    ParticipantStatus.REJECTED,
+                ]),
+            )
+            .values(**values)
+        )
+        result = await self.db.execute(stmt)
+        await self.db.flush()
+        return result.rowcount
 
     async def soft_delete(self, meeting: Meeting) -> None:
         try:
